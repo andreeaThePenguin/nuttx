@@ -219,16 +219,14 @@ void lpwork_boostpriority(uint8_t reqprio)
   /* Prevent context switches until we get the priorities right */
 
   flags = enter_critical_section();
-  sched_lock();
 
   /* Adjust the priority of every worker thread */
 
   for (wndx = 0; wndx < CONFIG_SCHED_LPNTHREADS; wndx++)
     {
-      lpwork_boostworker(g_lpwork.worker[wndx].pid, reqprio);
+      lpwork_boostworker(lpwork().worker[wndx].pid, reqprio);
     }
 
-  sched_unlock();
   leave_critical_section(flags);
 }
 
@@ -265,16 +263,14 @@ void lpwork_restorepriority(uint8_t reqprio)
   /* Prevent context switches until we get the priorities right */
 
   flags = enter_critical_section();
-  sched_lock();
 
   /* Adjust the priority of every worker thread */
 
   for (wndx = 0; wndx < CONFIG_SCHED_LPNTHREADS; wndx++)
     {
-      lpwork_restoreworker(g_lpwork.worker[wndx].pid, reqprio);
+      lpwork_restoreworker(lpwork().worker[wndx].pid, reqprio);
     }
 
-  sched_unlock();
   leave_critical_section(flags);
 }
 

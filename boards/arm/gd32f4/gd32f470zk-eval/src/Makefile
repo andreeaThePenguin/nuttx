@@ -1,5 +1,5 @@
 ############################################################################
-# boards/arm/gd32f4/gd32f470zk-eval/src/Make.defs
+# boards/arm/gd32f4/gd32f470zk-eval/src/Makefile
 #
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
@@ -22,14 +22,15 @@ include $(TOPDIR)/Make.defs
 
 CSRCS = gd32f4xx_boot.c
 
-ifeq ($(CONFIG_BOARDCTL),y)
-CSRCS += gd32f4xx_appinit.c
-endif
 # ifeq ($(CONFIG_BOARDCTL),y)
-# CSRCS += gd32f4xx_appinit.c gd32f4xx_bringup.c
-# else ifeq ($(CONFIG_BOARD_LATE_INITIALIZE),y)
-# CSRCS += gd32f4xx_bringup.c
+# CSRCS += gd32f4xx_appinit.c
 # endif
+
+ifeq ($(CONFIG_BOARDCTL),y)
+CSRCS += gd32f4xx_appinit.c gd32f4xx_bringup.c
+else ifeq ($(CONFIG_BOARD_LATE_INITIALIZE),y)
+CSRCS += gd32f4xx_bringup.c
+endif
 
 ifeq ($(CONFIG_ARCH_LEDS),y)
 CSRCS += gd32f4xx_autoleds.c
@@ -63,6 +64,10 @@ endif
 
 ifeq ($(CONFIG_BOARDCTL_RESET), y)
 CSRCS += gd32f4xx_reset.c
+endif
+
+ifeq ($(CONFIG_ETC_ROMFS), y)
+CSRCS += etc_romfs.c
 endif
 
 include $(TOPDIR)/boards/Board.mk

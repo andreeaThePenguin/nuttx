@@ -313,7 +313,7 @@ static int arm_gic_send_sgi(unsigned int sgi_id, uint64_t target_aff,
   uint32_t aff1;
   uint64_t sgi_val;
 
-  assert(GIC_IS_SGI(sgi_id));
+  ASSERT(GIC_IS_SGI(sgi_id));
 
   /* Extract affinity fields from target */
 
@@ -448,7 +448,7 @@ static void gicv3_cpuif_init(void)
       CP15_SET(ICC_SRE, icc_sre);
       icc_sre = CP15_GET(ICC_SRE);
 
-      assert(icc_sre & ICC_SRE_ELX_SRE_BIT);
+      ASSERT(icc_sre & ICC_SRE_ELX_SRE_BIT);
     }
 
   CP15_SET(ICC_PMR, GIC_IDLE_PRIO);
@@ -727,7 +727,7 @@ static int gic_validate_dist_version(void)
   spis  = MIN(GICD_TYPER_SPIS(typer), 1020U) - 32;
   espis = GICD_TYPER_ESPIS(typer);
 
-  sinfo("GICD_TYPER = 0x%x\n", typer);
+  sinfo("GICD_TYPER = 0x%" PRIu32 "\n", typer);
   sinfo("%d SPIs implemented\n", spis);
   sinfo("%d Extended SPIs implemented\n", espis);
 

@@ -1,5 +1,5 @@
 # ##############################################################################
-# arch/sim/cmake/Toolchain.cmake
+# arch/sim/src/cmake/Toolchain.cmake
 #
 # Licensed to the Apache Software Foundation (ASF) under one or more contributor
 # license agreements.  See the NOTICE file distributed with this work for
@@ -99,13 +99,16 @@ if(CONFIG_CXX_STANDARD)
 endif()
 
 set(ARCHCFLAGS "-Wstrict-prototypes")
-set(ARCHCXXFLAGS "-nostdinc++")
 
-if(CONFIG_CXX_EXCEPTION)
+if(NOT CONFIG_LIBCXXTOOLCHAIN)
+  set(ARCHCXXFLAGS "${ARCHCXXFLAGS} -nostdinc++")
+endif()
+
+if(NOT CONFIG_CXX_EXCEPTION)
   string(APPEND ARCHCXXFLAGS " -fno-exceptions -fcheck-new")
 endif()
 
-if(CONFIG_CXX_RTTI)
+if(NOT CONFIG_CXX_RTTI)
   string(APPEND ARCHCXXFLAGS " -fno-rtti")
 endif()
 

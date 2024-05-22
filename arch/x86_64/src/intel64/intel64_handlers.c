@@ -62,8 +62,6 @@
 #ifndef CONFIG_SUPPRESS_INTERRUPTS
 static uint64_t *common_handler(int irq, uint64_t *regs)
 {
-  board_autoled_on(LED_INIRQ);
-
   /* Current regs non-zero indicates that we are processing an interrupt;
    * g_current_regs is also used to manage interrupt level context switches.
    *
@@ -86,12 +84,6 @@ static uint64_t *common_handler(int irq, uint64_t *regs)
 
   if (regs != g_current_regs)
     {
-#ifdef CONFIG_ARCH_FPU
-      /* Restore floating point registers */
-
-      up_restorefpu((uint64_t *)g_current_regs);
-#endif
-
 #ifdef CONFIG_ARCH_ADDRENV
       /* Make sure that the address environment for the previously
        * running task is closed down gracefully (data caches dump,
@@ -141,9 +133,9 @@ static uint64_t *common_handler(int irq, uint64_t *regs)
 
 uint64_t *isr_handler(uint64_t *regs, uint64_t irq)
 {
-#ifdef CONFIG_SUPPRESS_INTERRUPTS
   board_autoled_on(LED_INIRQ);
 
+#ifdef CONFIG_SUPPRESS_INTERRUPTS
   /* Doesn't return */
 
   PANIC();
@@ -194,7 +186,7 @@ uint64_t *isr_handler(uint64_t *regs, uint64_t irq)
 }
 
 /****************************************************************************
- * Name: isr_handler
+ * Name: irq_handler
  *
  * Description:
  *   This gets called from IRQ vector handling logic in intel64_vectors.S
@@ -203,9 +195,9 @@ uint64_t *isr_handler(uint64_t *regs, uint64_t irq)
 
 uint64_t *irq_handler(uint64_t *regs, uint64_t irq_no)
 {
-#ifdef CONFIG_SUPPRESS_INTERRUPTS
   board_autoled_on(LED_INIRQ);
 
+#ifdef CONFIG_SUPPRESS_INTERRUPTS
   /* Doesn't return */
 
   PANIC();
@@ -216,8 +208,6 @@ uint64_t *irq_handler(uint64_t *regs, uint64_t irq_no)
 #else
   uint64_t *ret;
   int irq;
-
-  board_autoled_on(LED_INIRQ);
 
   /* Get the IRQ number */
 

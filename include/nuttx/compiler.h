@@ -207,8 +207,8 @@
 
 /* Branch prediction */
 
-#  define predict_true(x) __builtin_expect(!!(x), 1)
-#  define predict_false(x) __builtin_expect((x), 0)
+#  define predict_true(x)  __builtin_expect(!!(x), 1)
+#  define predict_false(x) __builtin_expect(!!(x), 0)
 
 /* Code locate */
 
@@ -245,6 +245,7 @@
  */
 
 #  define always_inline_function __attribute__((always_inline,no_instrument_function))
+#  define inline_function __attribute__((always_inline)) inline
 #  define noinline_function __attribute__((noinline))
 
 /* The noinstrument_function attribute informs GCC don't instrument it */
@@ -302,6 +303,7 @@
 #    define malloc_like1(a) __attribute__((__malloc__(__builtin_free, 1))) __attribute__((__alloc_size__(a)))
 #    define malloc_like2(a, b) __attribute__((__malloc__(__builtin_free, 1))) __attribute__((__alloc_size__(a, b)))
 #    define realloc_like(a) __attribute__((__alloc_size__(a)))
+#    define realloc_like2(a, b) __attribute__((__alloc_size__(a, b)))
 #  else
 #    define fopen_like __attribute__((__malloc__))
 #    define popen_like __attribute__((__malloc__))
@@ -309,6 +311,7 @@
 #    define malloc_like1(a) __attribute__((__malloc__)) __attribute__((__alloc_size__(a)))
 #    define malloc_like2(a, b) __attribute__((__malloc__)) __attribute__((__alloc_size__(a, b)))
 #    define realloc_like(a) __attribute__((__alloc_size__(a)))
+#    define realloc_like2(a, b) __attribute__((__alloc_size__(a, b)))
 #  endif
 
 /* Some versions of GCC have a separate __syslog__ format.
@@ -557,6 +560,7 @@
 /* SDCC does not support forced inlining. */
 
 #  define always_inline_function
+#  define inline_function inline
 #  define noinline_function
 #  define noinstrument_function
 #  define nooptimiziation_function
@@ -701,6 +705,7 @@
 #  define end_packed_struct
 #  define naked_function
 #  define always_inline_function
+#  define inline_function inline
 #  define noinline_function
 #  define noinstrument_function
 #  define nooptimiziation_function
@@ -813,6 +818,7 @@
 #  define reentrant_function
 #  define naked_function
 #  define always_inline_function
+#  define inline_function inline
 #  define noinline_function
 #  define noinstrument_function
 #  define nooptimiziation_function
@@ -904,6 +910,7 @@
 #  define reentrant_function
 #  define naked_function
 #  define always_inline_function
+#  define inline_function __forceinline
 #  define noinline_function
 #  define noinstrument_function
 #  define nooptimiziation_function
@@ -914,6 +921,85 @@
 #  define unused_data
 #  define used_code
 #  define used_data
+#  define fopen_like
+#  define popen_like
+#  define malloc_like
+#  define malloc_like1(a)
+#  define malloc_like2(a, b)
+#  define realloc_like(a)
+#  define format_like(a)
+#  define printf_like(a, b)
+#  define syslog_like(a, b)
+#  define scanf_like(a, b)
+#  define strftime_like(a)
+
+#  define FAR
+#  define NEAR
+#  define DSEG
+#  define CODE
+#  define IOBJ
+#  define IPTR
+
+#  undef  CONFIG_SMALL_MEMORY
+#  undef  CONFIG_LONG_IS_NOT_INT
+#  undef  CONFIG_PTR_IS_NOT_INT
+
+#  define UNUSED(a) ((void)(1 || &(a)))
+
+#  define offsetof(a, b) ((size_t)(&(((a *)(0))->b)))
+#  define return_address(x) 0
+
+#  define no_builtin(n)
+
+/* TASKING (Infineon AURIX C/C++)-specific definitions **********************/
+
+#elif defined(__TASKING__)
+
+/* Define these here and allow specific architectures to override as needed */
+
+#  define CONFIG_HAVE_LONG_LONG         1
+#  define CONFIG_HAVE_FLOAT             1
+#  define CONFIG_HAVE_DOUBLE            1
+#  define CONFIG_HAVE_LONG_DOUBLE       1
+
+/* Pre-processor */
+
+#  define CONFIG_CPP_HAVE_VARARGS       1 /* Supports variable argument macros */
+
+/* Intriniscs */
+
+#  define CONFIG_HAVE_FUNCTIONNAME      1 /* Has __FUNCTION__ */
+#  define CONFIG_HAVE_FILENAME          1 /* Has __FILE__ */
+
+#  undef  CONFIG_CPP_HAVE_WARNING
+#  undef  CONFIG_HAVE_WEAKFUNCTIONS
+#  define weak_alias(name, aliasname)
+#  define weak_data                     __attribute__((weak))
+#  define weak_function                 __attribute__((weak))
+#  define weak_const_function           __attribute__((weak, __const__))
+#  define restrict
+#  define noreturn_function
+#  define farcall_function              __attribute__((long_call))
+#  define predict_true(x) (x)
+#  define predict_false(x) (x)
+#  define aligned_data(n)               __attribute__((aligned(n)))
+#  define locate_code(n)                __attribute__((section(n)))
+#  define locate_data(n)                __attribute__((section(n)))
+#  define begin_packed_struct
+#  define end_packed_struct             __attribute__((packed))
+#  define reentrant_function
+#  define naked_function
+#  define always_inline_function        __attribute__((always_inline))
+#  define noinline_function             __attribute__((noinline))
+#  define noinstrument_function
+#  define nooptimiziation_function      __attribute__((optimize(0)))
+#  define nosanitize_address
+#  define nosanitize_undefined
+#  define nostackprotect_function
+#  define unused_code                   __attribute__((unused))
+#  define unused_data                   __attribute__((unused))
+#  define used_code                     __attribute__((used))
+#  define used_data                     __attribute__((used))
 #  define fopen_like
 #  define popen_like
 #  define malloc_like
@@ -970,6 +1056,7 @@
 #  define reentrant_function
 #  define naked_function
 #  define always_inline_function
+#  define inline_function
 #  define noinline_function
 #  define noinstrument_function
 #  define nooptimiziation_function

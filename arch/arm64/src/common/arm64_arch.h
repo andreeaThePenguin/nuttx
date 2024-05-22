@@ -32,6 +32,7 @@
  */
 #ifndef __ASSEMBLY__
   #include <stdint.h>
+  #include <nuttx/nuttx.h>
 #endif
 
 #include <sys/param.h>
@@ -118,6 +119,8 @@
 #define SPSR_MODE_EL1H      (0x5)
 #define SPSR_MODE_EL2T      (0x8)
 #define SPSR_MODE_EL2H      (0x9)
+#define SPSR_MODE_EL3T      (0xc)
+#define SPSR_MODE_EL3H      (0xd)
 #define SPSR_MODE_MASK      (0xf)
 
 /* CurrentEL: Current Exception Level */
@@ -142,8 +145,6 @@
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
-
-#define STRINGIFY(x)    #x
 
 #define GET_EL(mode)  (((mode) >> MODE_EL_SHIFT) & MODE_EL_MASK)
 
@@ -479,9 +480,17 @@ static inline void arch_nop(void)
                       ::: "memory");                \
   })
 
+/* Non-atomic modification of registers */
+
 #define modreg8(v,m,a)  putreg8((getreg8(a) & ~(m)) | ((v) & (m)), (a))
 #define modreg16(v,m,a) putreg16((getreg16(a) & ~(m)) | ((v) & (m)), (a))
 #define modreg32(v,m,a) putreg32((getreg32(a) & ~(m)) | ((v) & (m)), (a))
+
+/* Atomic modification of registers */
+
+void modifyreg8(unsigned int addr, uint8_t clearbits, uint8_t setbits);
+void modifyreg16(unsigned int addr, uint16_t clearbits, uint16_t setbits);
+void modifyreg32(unsigned int addr, uint32_t clearbits, uint32_t setbits);
 
 /****************************************************************************
  * Name:

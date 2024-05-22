@@ -249,7 +249,7 @@ typedef uint16_t     sa_family_t;
 
 #ifdef CONFIG_SYSTEM_TIME64
 typedef uint64_t     clock_t;
-typedef int64_t      time_t;         /* Holds time in seconds */
+typedef uint64_t     time_t;         /* Holds time in seconds */
 #else
 typedef uint32_t     clock_t;
 typedef uint32_t     time_t;         /* Holds time in seconds */
@@ -268,11 +268,7 @@ typedef int32_t      suseconds_t;
 
 /* This is the smallest integer type that will hold a bitset of all CPUs */
 
-#if (CONFIG_SMP_NCPUS <= 8)
-typedef volatile uint8_t cpu_set_t;
-#elif (CONFIG_SMP_NCPUS <= 16)
-typedef volatile uint16_t cpu_set_t;
-#elif (CONFIG_SMP_NCPUS <= 32)
+#if (CONFIG_SMP_NCPUS <= 32)
 typedef volatile uint32_t cpu_set_t;
 #else
 #  error SMP: Extensions needed to support this number of CPUs

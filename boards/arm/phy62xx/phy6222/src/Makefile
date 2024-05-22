@@ -1,5 +1,5 @@
 ############################################################################
-# boards/arm/stm32f0l0g0/stm32f051-discovery/src/Makefile
+# boards/arm/phy62xx/phy6222/src/Makefile
 #
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
@@ -28,5 +28,9 @@ CSRCS += buttons.c
 CSRCS += appinit.c
 
 CSRCS += reset.c
+
+ifeq ($(CONFIG_ETC_ROMFS),y)
+CSRCS += etc_romfs.c
+endif
 
 include $(TOPDIR)/boards/Board.mk

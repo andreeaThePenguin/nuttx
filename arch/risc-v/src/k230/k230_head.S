@@ -26,32 +26,44 @@
 
 #include <arch/arch.h>
 #include <arch/irq.h>
+#include <arch/mode.h>
 
 #include "chip.h"
 #include "riscv_internal.h"
+#include "riscv_macros.S"
 
 /****************************************************************************
  * Public Symbols
  ****************************************************************************/
+  /* Imported symbols */
+
+  .extern __trap_vec
 
   /* Exported Symbols */
 
   .section .text
+
+#ifdef CONFIG_NUTTSBI
+
+  .global __start_s
+
+__start_s:
+
+#else
+
   .global __start
 
 __start:
 
-  /* Preserve a1 as it contains the pointer to DTB */
+#endif
+
+  /* Preserve a1 by not using it here as it contains DTB */
+
+#ifndef CONFIG_BUILD_KERNEL
   /* Load mhartid (cpuid) */
 
-  csrr a0, mhartid
-
-  /* Set stack pointer to the idle thread stack */
-
-  bnez a0, 1f
-  la   sp, K230_IDLESTACK_TOP
-  j    2f
-1:
+  csrr a0, CSR_MHARTID
+#endif
 
   /* Load the number of CPUs that the kernel supports */
 
@@ -64,47 +76,21 @@ __start:
   /* If a0 (mhartid) >= t1 (the number of CPUs), stop here */
 
   blt  a0, t1, 3f
-  csrw mie, zero
+  csrw CSR_IE, zero
   wfi
 
 3:
-  /* To get g_cpu_basestack[mhartid], must get g_cpu_basestack first */
+  /* Set stack pointer to the idle thread stack */
+  riscv_set_inital_sp K230_IDLESTACK_BASE, SMP_STACK_SIZE, a0
 
-  la   t0, g_cpu_basestack
+  /* Disable all interrupts (i.e. timer, external) */
 
-  /* Offset = pointer width * hart id */
+	csrw CSR_IE, zero
 
-#ifdef CONFIG_ARCH_RV32
-  slli t1, a0, 2
-#else
-  slli t1, a0, 3
-#endif
-  add  t0, t0, t1
+  la   t0, __trap_vec        /* __trap_dump */
+  csrw CSR_TVEC, t0
 
-  /* Load idle stack base to sp */
-
-  REGLOAD sp, 0(t0)
-
-  /*
-   * sp (stack top) = sp + idle stack size - XCPTCONTEXT_SIZE
-   *
-   * Note: Reserve some space used by up_initial_state since we are already
-   * running and using the per CPU idle stack.
-   */
-
-  li   t0, STACK_ALIGN_UP(CONFIG_IDLETHREAD_STACKSIZE - XCPTCONTEXT_SIZE)
-  add  sp, sp, t0
-
-2:
-
-  /* Disable all interrupts (i.e. timer, external) in mie */
-
-	csrw	mie, zero
-
-  la   t0, __trap_vec
-  csrw mtvec, t0
-
-  /* Jump to k230_start */
+  /* Jump to k230_start, a0=mhartid, a1=dtb */
 
   jal  x1, k230_start
 

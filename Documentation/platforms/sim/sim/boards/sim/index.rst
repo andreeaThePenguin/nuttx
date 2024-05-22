@@ -692,6 +692,7 @@ NOTES
      running C++ static initializers until NuttX has been initialized.
 
 fb
+--
 
 A simple configuration used for some basic (non-graphic) debug of the
 framebuffer character drivers using apps/examples/fb.
@@ -1043,7 +1044,7 @@ NOTES
          @@ -117,7 +117,8 @@
             /* Execute the startup script */
 
-          #ifdef CONFIG_NSH_ROMFSETC
+          #ifdef CONFIG_ETC_ROMFS
          -  nsh_script(&pstate->cn_vtbl, "init", NSH_INITPATH);
          +// REMOVE ME
          +//  nsh_script(&pstate->cn_vtbl, "init", NSH_INITPATH);
@@ -1115,14 +1116,14 @@ rpproxy and rpserver
 
   rpserver: Remote master(host) server process.
             rpserver contains all the real hardware configuration, such as:
-              1.Universal Asynchronous Receiver/Transmitter (UART).
-              2.Specific File System.
-              3.Network protocol stack and real network card device.
-              4....
+              1. Universal Asynchronous Receiver/Transmitter (UART).
+              2. Specific File System.
+              3. Network protocol stack and real network card device.
+              4. ...
 
 Rpmsg driver used in this example include:
 
-1.Rpmsg Syslog
+1. Rpmsg Syslog
 
     Source::
 
@@ -1250,6 +1251,8 @@ To use this example:
               1     1 224 FIFO     Kthread --- Waiting  Signal    00000000 002032 hpwork
               3     3 100 FIFO     Task    --- Running            00000000 004080 init
 
+      To switch back the console, type ``"~."`` in the cu session.
+
 3. RpmsgFS:
 
    Mount the remote file system via RPMSGFS, cu to proxy first::
@@ -1370,6 +1373,33 @@ This is a configuration to test CONFIG_LIBC_MODLIB with CONFIG_SIM_M32
 and 32-bit modules.
 This has apps/examples/sotest enabled.
 This configuration is intended for 64-bit host OS.
+
+sqlite
+-------
+
+This configuration is used to test sqlite. Since hostfs does not support
+FIOC_FILEPATH, it cannot currently be used in hostfs.
+
+Basic usage example::
+
+    nsh> cd tmp
+    nsh> sqlite3 test.db
+    SQLite version 3.45.1 2024-01-30 16:01:20
+    Enter ".help" for usage hints.
+    sqlite>
+    CREATE TABLE COMPANY(
+      ID INT PRIMARY KEY     sqlite> (x1...> NOT NULL,
+      NAME           TEXT    NOT NULL,
+      AGE            (x1...> (x1...> INT     NOT NULL,
+      ADDRESS        CHAR(50),
+      SALARY         (x1...> (x1...> REAL
+    );(x1...>
+    sqlite> .quit
+    sqlite>
+    nsh>
+    nsh> ls -l
+    /tmp:
+    -rwxrwxrwx       12288 test.db
 
 tcploop
 -------
@@ -1679,7 +1709,7 @@ This is a configuration with sim usbdev support.
   Then you can use commands such as adb shell, adb push, adb pull as normal.
 
     2> Run RNDIS:
-  
+
   NuttX enter command::
 
       $ conn 0

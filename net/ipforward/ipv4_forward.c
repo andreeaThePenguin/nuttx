@@ -286,13 +286,13 @@ static int ipv4_dev_forward(FAR struct net_driver_s *dev,
       goto errout_with_fwd;
     }
 
-#ifdef CONFIG_NET_NAT
+#ifdef CONFIG_NET_NAT44
   /* Try NAT outbound, rule matching will be performed in NAT module. */
 
   ret = ipv4_nat_outbound(fwd->f_dev, ipv4, NAT_MANIP_SRC);
   if (ret < 0)
     {
-      nwarn("WARNING: Performing NAT outbound failed, dropping!\n");
+      nwarn("WARNING: Performing NAT44 outbound failed, dropping!\n");
       goto errout_with_fwd;
     }
 #endif
@@ -364,20 +364,11 @@ static int ipv4_forward_callback(FAR struct net_driver_s *fwddev,
     {
       /* Backup the forward IP packet */
 
-      iob = iob_tryalloc(true);
+      iob = netdev_iob_clone(dev, true);
       if (iob == NULL)
         {
-          nerr("ERROR: iob alloc failed when forward broadcast\n");
+          nerr("ERROR: IOB clone failed when forwarding broadcast.\n");
           return -ENOMEM;
-        }
-
-      iob_reserve(iob, CONFIG_NET_LL_GUARDSIZE);
-      ret = iob_clone_partial(dev->d_iob, dev->d_iob->io_pktlen, 0,
-                              iob, 0, true, false);
-      if (ret < 0)
-        {
-          iob_free_chain(iob);
-          return ret;
         }
 
       /* Recover the pointer to the IPv4 header in the receiving device's
@@ -541,13 +532,13 @@ drop:
 
 #ifdef CONFIG_NET_ICMP
 reply:
-#  ifdef CONFIG_NET_NAT
+#  ifdef CONFIG_NET_NAT44
   /* Before we reply ICMP, call NAT outbound to try to translate destination
    * address & port back to original status.
    */
 
   ipv4_nat_outbound(dev, ipv4, NAT_MANIP_DST);
-#  endif /* CONFIG_NET_NAT */
+#  endif /* CONFIG_NET_NAT44 */
 
   icmp_reply(dev, icmp_reply_type, icmp_reply_code);
   return OK;

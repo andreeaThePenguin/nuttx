@@ -135,14 +135,31 @@
 
 /* CPUID Leaf Definitions */
 
-#define X86_64_CPUID_CAP         0x01
-#  define X86_64_CPUID_01_SSE3   (1 << 0)
-#  define X86_64_CPUID_01_PCID   (1 << 17)
-#  define X86_64_CPUID_01_X2APIC (1 << 21)
-#  define X86_64_CPUID_01_TSCDEA (1 << 24)
-#  define X86_64_CPUID_01_XSAVE  (1 << 26)
-#  define X86_64_CPUID_01_RDRAND (1 << 30)
-#define X86_64_CPUID_TSC         0x15
+#define X86_64_CPUID_VENDOR           0x00
+#define X86_64_CPUID_CAP              0x01
+#  define X86_64_CPUID_01_SSE3        (1 << 0)
+#  define X86_64_CPUID_01_SSSE3       (1 << 9)
+#  define X86_64_CPUID_01_PCID        (1 << 17)
+#  define X86_64_CPUID_01_SSE41       (1 << 19)
+#  define X86_64_CPUID_01_SSE42       (1 << 20)
+#  define X86_64_CPUID_01_X2APIC      (1 << 21)
+#  define X86_64_CPUID_01_TSCDEA      (1 << 24)
+#  define X86_64_CPUID_01_XSAVE       (1 << 26)
+#  define X86_64_CPUID_01_RDRAND      (1 << 30)
+#  define X86_64_CPUID_01_APICID(ebx) ((ebx) >> 24)
+#define X86_64_CPUID_EXTCAP           0x07
+#  define X86_64_CPUID_07_AVX2        (1 << 5)
+#  define X86_64_CPUID_07_AVX512F     (1 << 16)
+#  define X86_64_CPUID_07_AVX512DQ    (1 << 17)
+#  define X86_64_CPUID_07_SMAP        (1 << 20)
+#  define X86_64_CPUID_07_AVX512IFMA  (1 << 21)
+#  define X86_64_CPUID_07_CLWB        (1 << 24)
+#  define X86_64_CPUID_07_AVX512PF    (1 << 26)
+#  define X86_64_CPUID_07_AVX512ER    (1 << 27)
+#  define X86_64_CPUID_07_AVX512CD    (1 << 28)
+#  define X86_64_CPUID_07_AVX512BW    (1 << 30)
+#  define X86_64_CPUID_07_AVX512VL    (1 << 31)
+#define X86_64_CPUID_TSC              0x15
 
 /* MSR Definitions */
 
@@ -248,6 +265,13 @@
 
 #define BITS_PER_LONG    64
 
+/* Reset Control Register (RST_CNT) */
+
+#define X86_RST_CNT_REG        0xcf9
+#  define X86_RST_CNT_SYS_RST  0x02
+#  define X86_RST_CNT_CPU_RST  0x04
+#  define X86_RST_CNT_FULL_RST 0x08
+
 #ifndef __ASSEMBLY__
 
 /****************************************************************************
@@ -342,8 +366,7 @@ begin_packed_struct struct ist_s
   uint64_t IST6;                 /* Interrupt Stack 6 */
   uint64_t IST7;                 /* Interrupt Stack 7 */
   uint64_t reserved3;            /* reserved */
-  uint64_t reserved4;            /* reserved */
-  uint16_t reserved5;            /* reserved */
+  uint16_t reserved4;            /* reserved */
   uint16_t IOPB_OFFSET;          /* IOPB_offset */
 } end_packed_struct;
 
@@ -357,25 +380,25 @@ begin_packed_struct struct ist_s
 
 /* These are defined in intel64_head.S */
 
-extern volatile uint8_t pdpt_low;
-extern volatile uint8_t pd_low;
-extern volatile uint8_t pt_low;
+extern volatile uint8_t g_pdpt_low;
+extern volatile uint8_t g_pd_low;
+extern volatile uint8_t g_pt_low;
 
-extern volatile uint8_t ist64_low;
-extern volatile uint8_t gdt64_low;
-extern volatile uint8_t gdt64_ist_low;
-extern volatile uint8_t gdt64_low_end;
+extern volatile uint8_t g_ist64_low;
+extern volatile uint8_t g_gdt64_low;
+extern volatile uint8_t g_gdt64_ist_low;
+extern volatile uint8_t g_gdt64_low_end;
 
 /* The actual address of the page table and gdt/ist after mapping the kernel
  * in high address
  */
 
-extern volatile uint64_t *pdpt;
-extern volatile uint64_t *pd;
-extern volatile uint64_t *pt;
+extern volatile uint64_t *g_pdpt;
+extern volatile uint64_t *g_pd;
+extern volatile uint64_t *g_pt;
 
-extern volatile struct ist_s *ist64;
-extern volatile struct gdt_entry_s *gdt64;
+extern volatile struct ist_s       *g_ist64;
+extern volatile struct gdt_entry_s *g_gdt64;
 
 /****************************************************************************
  * Public Function Prototypes

@@ -83,7 +83,7 @@ config ARCH_CHIP_AM335X
 
 config ARCH_CHIP_FVP_ARMV8R_AARCH32
 	bool "ARM FVP virt platform (ARMv8r AARCH32)"
-	select ARCH_ARMV8R
+	select ARCH_CORTEXR52
 	select ARCH_HAVE_LOWVECTORS
 	select ARCH_HAVE_FETCHADD
 	select ARMV8R_HAVE_DECODEFIQ
@@ -305,6 +305,7 @@ config ARCH_CHIP_NRF91
 	select ARCH_HAVE_TRUSTZONE
 	select ARCH_HAVE_TICKLESS
 	select ARCH_DMA_NO_FLASH_TRANSFER
+	select ARCH_HAVE_FPU
 	depends on EXPERIMENTAL
 	---help---
 		Nordic nRF91 architectures (ARM Cortex-M33 with integrated
@@ -600,6 +601,7 @@ config ARCH_CHIP_XMC4
 	select ARCH_HAVE_I2CRESET
 	select ARM_HAVE_MPU_UNIFIED
 	select ARMV7M_HAVE_STACKCHECK
+	select ARCH_HAVE_TICKLESS
 	---help---
 		Infineon XMC4xxx(ARM Cortex-M4) architectures
 
@@ -647,6 +649,11 @@ config ARCH_CHIP_TLSR82
 	select LIBC_ARCH_ATOMIC
 	---help---
 		Telink tlsr82xx architectures (Customed armv6m)
+
+config ARCH_CHIP_MPS
+	bool "MPS ARM Series"
+	---help---
+		MPS platform (MPS2 MPS3)
 
 config ARCH_CHIP_QEMU_ARM
 	bool "QEMU virt platform (ARMv7a)"
@@ -926,6 +933,13 @@ config ARCH_CORTEXR7
 	select ARCH_HAVE_MPU
 	select ARCH_HAVE_TESTSET
 
+config ARCH_CORTEXR52
+	bool
+	default n
+	select ARCH_ARMV8R
+	select ARCH_HAVE_MPU
+	select ARCH_HAVE_TESTSET
+
 config ARCH_ARMV8M
 	bool
 	default n
@@ -1087,6 +1101,7 @@ config ARCH_CHIP
 	default "phy62xx"	if ARCH_CHIP_PHY62XX
 	default "tlsr82"	if ARCH_CHIP_TLSR82
 	default "qemu"		if ARCH_CHIP_QEMU_ARM
+	default "mps"		if ARCH_CHIP_MPS
 	default "goldfish"	if ARCH_CHIP_GOLDFISH_ARM
 	default "at32"		if ARCH_CHIP_AT32
 
@@ -1563,6 +1578,9 @@ source "arch/arm/src/tlsr82/Kconfig"
 endif
 if ARCH_CHIP_QEMU_ARM
 source "arch/arm/src/qemu/Kconfig"
+endif
+if ARCH_CHIP_MPS
+source "arch/arm/src/mps/Kconfig"
 endif
 if ARCH_CHIP_GOLDFISH_ARM
 source "arch/arm/src/goldfish/Kconfig"

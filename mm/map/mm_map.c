@@ -64,7 +64,15 @@ static bool in_range(FAR const void *start, size_t length,
 
 int mm_map_lock(void)
 {
-  return nxrmutex_lock(&get_current_mm()->mm_map_mutex);
+  FAR struct tcb_s *tcb = nxsched_self();
+  FAR struct task_group_s *group = tcb->group;
+
+  if (group == NULL)
+    {
+      return -EINVAL;
+    }
+
+  return nxrmutex_lock(&group->tg_mm_map.mm_map_mutex);
 }
 
 /****************************************************************************
@@ -77,7 +85,15 @@ int mm_map_lock(void)
 
 void mm_map_unlock(void)
 {
-  DEBUGVERIFY(nxrmutex_unlock(&get_current_mm()->mm_map_mutex));
+  FAR struct tcb_s *tcb = nxsched_self();
+  FAR struct task_group_s *group = tcb->group;
+
+  if (group == NULL)
+    {
+      return;
+    }
+
+  DEBUGVERIFY(nxrmutex_unlock(&group->tg_mm_map.mm_map_mutex));
 }
 
 /****************************************************************************
@@ -101,8 +117,7 @@ void mm_map_initialize(FAR struct mm_map_s *mm, bool kernel)
   if (!kernel)
     {
       mm->mm_map_vpages = gran_initialize((FAR void *)CONFIG_ARCH_SHM_VBASE,
-                                          ARCH_SHM_MAXPAGES << MM_PGSHIFT,
-                                          MM_PGSHIFT, MM_PGSHIFT);
+                                     ARCH_SHM_SIZE, MM_PGSHIFT, MM_PGSHIFT);
       if (!mm->mm_map_vpages)
         {
           merr("gran_initialize() failed\n");

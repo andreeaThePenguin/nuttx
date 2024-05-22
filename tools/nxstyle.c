@@ -206,7 +206,8 @@ static const char *g_white_prefix[] =
   "ub32",    /* Ref:  include/fixedmath.h */
   "lua_",    /* Ref:  apps/interpreters/lua/lua-5.x.x/src/lua.h */
   "luaL_",   /* Ref:  apps/interpreters/lua/lua-5.x.x/src/lauxlib.h */
-
+  "V4L2_",   /* Ref:  include/sys/video_controls.h */
+  "Ifx",     /* Ref:  arch/tricore/src */
   NULL
 };
 
@@ -451,6 +452,35 @@ static const char *g_white_content_list[] =
   "XUnmapWindow",
 
   /* Ref:
+   * nuttx/arch/sim/src/sim_hostdecoder.*
+   */
+
+  "ISVCDecoder",
+  "SBufferInfo",
+  "SDecodingParam",
+  "eEcActiveIdc",
+  "sVideoProperty",
+  "eVideoBsType",
+  "cmResultSuccess",
+  "uiInBsTimeStamp",
+  "dsErrorFree",
+  "iBufferStatus",
+  "UsrData",
+  "sSystemBuffer",
+  "iWidth",
+  "iHeight",
+  "iStride",
+  "uiOutYuvTimeStamp",
+  "WelsCreateDecoder",
+  "WelsDestroyDecoder",
+  "Initialize",
+  "Uninitialize",
+  "DecodeFrame2",
+  "FlushFrame",
+  "SetOption",
+  "GetOption",
+
+  /* Ref:
    * sim/posix/sim_deviceimage.c
    */
 
@@ -569,6 +599,12 @@ static const char *g_white_content_list[] =
 static const char *g_white_headers[] =
 {
   "windows.h",
+
+  /* Ref:
+   * arch/tricore/src/common/tricore_serial.c
+   */
+
+  "IfxAsclin_Asc.h",
   NULL
 };
 
@@ -1860,6 +1896,7 @@ int main(int argc, char **argv, char **envp)
               if (pnest == 0)
                 {
                   int tmppnest;
+                  bool tmpbstring;
 
                   /* Note, we have not yet parsed each character on the line so
                    * a comma have have been be preceded by '(' on the same line.
@@ -1867,11 +1904,11 @@ int main(int argc, char **argv, char **envp)
                    * case.
                    */
 
-                  for (i = indent, tmppnest = 0;
+                  for (i = indent, tmppnest = 0, tmpbstring = false;
                        line[i] != '\n' && line[i] != '\0';
                        i++)
                     {
-                      if (tmppnest == 0 && line[i] == ',')
+                      if (tmppnest == 0 && !tmpbstring && line[i] == ',')
                         {
                            ERROR("Multiple data definitions", lineno, i + 1);
                           break;
@@ -1890,6 +1927,10 @@ int main(int argc, char **argv, char **envp)
                             }
 
                           tmppnest--;
+                        }
+                      else if (line[i] == '"')
+                        {
+                          tmpbstring = !tmpbstring;
                         }
                       else if (line[i] == ';')
                         {
@@ -3081,7 +3122,16 @@ int main(int argc, char **argv, char **envp)
 
           if (m > g_maxline && !rhcomment)
             {
-              ERROR("Long line found", lineno, m);
+              /* Ignore the line 2 (file path) */
+
+              if (lineno == 2)
+                {
+                  INFO("Skipping checking line 2: path file\n", 2, m);
+                }
+              else
+                {
+                  ERROR("Long line found", lineno, m);
+                }
             }
         }
 
