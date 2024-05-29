@@ -265,7 +265,7 @@
 #define TM_YEAR_BASE          (1900)
 #define TM_WDAY_BASE          TM_MONDAY
 
-#define EPOCH_YEAR            1970
+#define EPOCH_YEAR            2024
 #define EPOCH_WDAY            TM_THURSDAY
 
 /****************************************************************************
