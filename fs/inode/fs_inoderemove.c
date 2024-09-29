@@ -96,6 +96,7 @@ static FAR struct inode *inode_unlink(FAR const char *path)
 
       node->i_peer   = NULL;
       node->i_parent = NULL;
+      atomic_fetch_sub(&node->i_crefs, 1);
     }
 
   RELEASE_SEARCH(&desc);
@@ -133,13 +134,8 @@ int inode_remove(FAR const char *path)
        * to it
        */
 
-      if (node->i_crefs)
+      if (atomic_load(&node->i_crefs))
         {
-          /* In that case, we will mark it deleted, when the filesystem
-           * releases the inode, we will then, finally delete the subtree
-           */
-
-          node->i_flags |= FSNODEFLAG_DELETED;
           return -EBUSY;
         }
       else

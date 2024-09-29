@@ -1,6 +1,8 @@
 ############################################################################
 # tools/esp32c3/Config.mk
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -218,7 +220,7 @@ define MKIMAGE
 	$(Q) echo "MKIMAGE: ESP32-C3 binary"
 	$(Q) if ! esptool.py version 1>/dev/null 2>&1; then \
 		echo ""; \
-		echo "esptool.py not found.  Please run: \"pip install esptool\""; \
+		echo "esptool.py not found.  Please run: \"pip install esptool==4.8.dev4\""; \
 		echo ""; \
 		echo "Run make again to create the nuttx.bin image."; \
 		exit 1; \

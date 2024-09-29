@@ -286,7 +286,7 @@
  *   CANIOC_A_CMD2          _CANIOC(CAN_A_FIRST+1)
  *   CANIOC_A_CMD3          _CANIOC(CAN_A_FIRST+2)
  *   ...
- *   CANIOC_A_CMD42            _CANIOC(CAN_A_FIRST+41)
+ *   CANIOC_A_CMD42         _CANIOC(CAN_A_FIRST+41)
  *
  * The next reservation would look like:
  *
@@ -296,16 +296,16 @@
 
 /* Convenience macros *******************************************************/
 
-#define dev_reset(dev)            dev->cd_ops->co_reset(dev)
-#define dev_setup(dev)            dev->cd_ops->co_setup(dev)
-#define dev_shutdown(dev)         dev->cd_ops->co_shutdown(dev)
-#define dev_txint(dev,enable)     dev->cd_ops->co_txint(dev,enable)
-#define dev_rxint(dev,enable)     dev->cd_ops->co_rxint(dev,enable)
-#define dev_ioctl(dev,cmd,arg)    dev->cd_ops->co_ioctl(dev,cmd,arg)
-#define dev_remoterequest(dev,id) dev->cd_ops->co_remoterequest(dev,id)
-#define dev_send(dev,m)           dev->cd_ops->co_send(dev,m)
-#define dev_txready(dev)          dev->cd_ops->co_txready(dev)
-#define dev_txempty(dev)          dev->cd_ops->co_txempty(dev)
+#define dev_reset(dev)            (dev)->cd_ops->co_reset(dev)
+#define dev_setup(dev)            (dev)->cd_ops->co_setup(dev)
+#define dev_shutdown(dev)         (dev)->cd_ops->co_shutdown(dev)
+#define dev_txint(dev,enable)     (dev)->cd_ops->co_txint(dev,enable)
+#define dev_rxint(dev,enable)     (dev)->cd_ops->co_rxint(dev,enable)
+#define dev_ioctl(dev,cmd,arg)    (dev)->cd_ops->co_ioctl(dev,cmd,arg)
+#define dev_remoterequest(dev,id) (dev)->cd_ops->co_remoterequest(dev,id)
+#define dev_send(dev,m)           (dev)->cd_ops->co_send(dev,m)
+#define dev_txready(dev)          (dev)->cd_ops->co_txready(dev)
+#define dev_txempty(dev)          (dev)->cd_ops->co_txempty(dev)
 
 /* CAN message support ******************************************************/
 
@@ -408,7 +408,7 @@
 #  define CANH_ERROR4_SHORT2VCC   0x03
 #  define CANH_ERROR4_SHORT2GND   0x04
 
-#  define CANL_ERROR4_MASK        0xf0 /* Bits 0-3: CANL */
+#  define CANL_ERROR4_MASK        0xf0 /* Bits 4-7: CANL */
 #  define CANL_ERROR4_NOWIRE      0x10
 #  define CANL_ERROR4_SHORT2BAT   0x20
 #  define CANL_ERROR4_SHORT2VCC   0x30
@@ -437,6 +437,11 @@
 #define CAN_FILTER_MASK           0  /* Address match under a mask */
 #define CAN_FILTER_DUAL           1  /* Dual address match */
 #define CAN_FILTER_RANGE          2  /* Match a range of addresses */
+
+/* CAN bit timing support ***************************************************/
+
+#define CAN_BITTIMING_NOMINAL     0  /* Specifies nominal bittiming */
+#define CAN_BITTIMING_DATA        1  /* Specifies data bittiming */
 
 /****************************************************************************
  * Public Types
@@ -544,7 +549,7 @@ struct can_rxfifo_s
   sem_t         rx_sem;
 
 #ifdef CONFIG_CAN_ERRORS
-  bool          rx_overflow;             /* Indicates the RX FIFO overflow event */
+  uint8_t       rx_error;                /* Flags to indicate internal device errors */
 #endif
   uint8_t       rx_head;                 /* Index to the head [IN] in the circular buffer */
   uint8_t       rx_tail;                 /* Index to the tail [OUT] in the circular buffer */
@@ -568,7 +573,7 @@ struct can_txfifo_s
 
 struct can_rtrwait_s
 {
-  sem_t         cr_sem;                  /* Wait for response/is the cd_rtr entry available */
+  sem_t                 cr_sem;          /* Wait for response/is the cd_rtr entry available */
   FAR struct can_msg_s *cr_msg;          /* This is where the RTR response goes */
 };
 
@@ -661,9 +666,6 @@ struct can_dev_s
   uint8_t              cd_crefs;         /* References counts on number of opens */
   uint8_t              cd_npendrtr;      /* Number of pending RTR messages */
   volatile uint8_t     cd_ntxwaiters;    /* Number of threads waiting to enqueue a message */
-#ifdef CONFIG_CAN_ERRORS
-  uint8_t              cd_error;         /* Flags to indicate internal device errors */
-#endif
   struct list_node     cd_readers;       /* List of readers */
   mutex_t              cd_closelock;     /* Locks out new opens while close is in progress */
   mutex_t              cd_polllock;      /* Manages exclusive access to cd_fds[] */
@@ -713,6 +715,13 @@ struct canioc_rtr_s
 
 struct canioc_bittiming_s
 {
+#ifdef CONFIG_CAN_FD
+  uint8_t               type;            /* Nominal/Data bit timing. This is
+                                          * used to specify which bit timing
+                                          * should be set/obtained. Applies
+                                          * only if CAN FD is configured.
+                                          */
+#endif
   uint32_t              bt_baud;         /* Bit rate = 1 / bit time */
   uint8_t               bt_tseg1;        /* TSEG1 in time quanta */
   uint8_t               bt_tseg2;        /* TSEG2 in time quanta */
@@ -859,8 +868,6 @@ int can_receive(FAR struct can_dev_s *dev, FAR struct can_hdr_s *hdr,
  *
  * Input Parameters:
  *   dev  - The specific CAN device
- *   hdr  - The 16-bit CAN header
- *   data - An array contain the CAN data.
  *
  * Returned Value:
  *   OK on success; a negated errno on failure.
@@ -935,6 +942,46 @@ int can_txdone(FAR struct can_dev_s *dev);
 #ifdef CONFIG_CAN_TXREADY
 int can_txready(FAR struct can_dev_s *dev);
 #endif
+
+/****************************************************************************
+ * Name: can_bytes2dlc
+ *
+ * Description:
+ *   In the CAN FD format, the coding of the DLC differs from the standard
+ *   CAN format. The DLC codes 0 to 8 have the same coding as in standard
+ *   CAN.  But the codes 9 to 15 all imply a data field of 8 bytes with
+ *   standard CAN.  In CAN FD mode, the values 9 to 15 are encoded to values
+ *   in the range 12 to 64.
+ *
+ * Input Parameters:
+ *   nbytes - the byte count to convert to a DLC value
+ *
+ * Returned Value:
+ *   The encoded DLC value corresponding to at least that number of bytes.
+ *
+ ****************************************************************************/
+
+uint8_t can_bytes2dlc(uint8_t nbytes);
+
+/****************************************************************************
+ * Name: can_dlc2bytes
+ *
+ * Description:
+ *   In the CAN FD format, the coding of the DLC differs from the standard
+ *   CAN format. The DLC codes 0 to 8 have the same coding as in standard
+ *   CAN.  But the codes 9 to 15 all imply a data field of 8 bytes with
+ *   standard CAN.  In CAN FD mode, the values 9 to 15 are encoded to values
+ *   in the range 12 to 64.
+ *
+ * Input Parameters:
+ *   dlc    - the DLC value to convert to a byte count
+ *
+ * Returned Value:
+ *   The number of bytes corresponding to the DLC value.
+ *
+ ****************************************************************************/
+
+uint8_t can_dlc2bytes(uint8_t dlc);
 
 #undef EXTERN
 #if defined(__cplusplus)

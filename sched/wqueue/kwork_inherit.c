@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/wqueue/kwork_inherit.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -224,7 +226,7 @@ void lpwork_boostpriority(uint8_t reqprio)
 
   for (wndx = 0; wndx < CONFIG_SCHED_LPNTHREADS; wndx++)
     {
-      lpwork_boostworker(lpwork().worker[wndx].pid, reqprio);
+      lpwork_boostworker(g_lpwork.worker[wndx].pid, reqprio);
     }
 
   leave_critical_section(flags);
@@ -268,7 +270,7 @@ void lpwork_restorepriority(uint8_t reqprio)
 
   for (wndx = 0; wndx < CONFIG_SCHED_LPNTHREADS; wndx++)
     {
-      lpwork_restoreworker(lpwork().worker[wndx].pid, reqprio);
+      lpwork_restoreworker(g_lpwork.worker[wndx].pid, reqprio);
     }
 
   leave_critical_section(flags);

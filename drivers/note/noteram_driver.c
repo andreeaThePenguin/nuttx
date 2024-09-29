@@ -295,7 +295,7 @@ static void noteram_remove(FAR struct noteram_driver_s *drv)
 
   /* Get the length of the note at the tail index */
 
-  length = drv->ni_buffer[tail];
+  length = NOTE_ALIGN(drv->ni_buffer[tail]);
   DEBUGASSERT(length <= noteram_length(drv));
 
   /* Increment the tail index to remove the entire note from the circular
@@ -365,7 +365,7 @@ static ssize_t noteram_get(FAR struct noteram_driver_s *drv,
     {
       /* Skip the large note so that we do not get constipated. */
 
-      drv->ni_read = noteram_next(drv, read, notelen);
+      drv->ni_read = noteram_next(drv, read, NOTE_ALIGN(notelen));
 
       /* and return an error */
 
@@ -387,7 +387,7 @@ static ssize_t noteram_get(FAR struct noteram_driver_s *drv,
       remaining--;
     }
 
-  drv->ni_read = read;
+  drv->ni_read = noteram_next(drv, drv->ni_read, NOTE_ALIGN(notelen));
 
   return notelen;
 }
@@ -498,7 +498,7 @@ static int noteram_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
           }
         else
           {
-            *(unsigned int *)arg = drv->ni_overwrite;
+            *(FAR unsigned int *)arg = drv->ni_overwrite;
             ret = OK;
           }
         break;
@@ -515,7 +515,7 @@ static int noteram_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
           }
         else
           {
-            drv->ni_overwrite = *(unsigned int *)arg;
+            drv->ni_overwrite = *(FAR unsigned int *)arg;
             ret = OK;
           }
         break;
@@ -567,7 +567,7 @@ static void noteram_add(FAR struct note_driver_s *driver,
   DEBUGASSERT(note != NULL && notelen < drv->ni_bufsize);
   remain = drv->ni_bufsize - noteram_length(drv);
 
-  if (remain < notelen)
+  if (remain <= NOTE_ALIGN(notelen))
     {
       if (drv->ni_overwrite == NOTERAM_MODE_OVERWRITE_DISABLE)
         {
@@ -586,7 +586,7 @@ static void noteram_add(FAR struct note_driver_s *driver,
           noteram_remove(drv);
           remain = drv->ni_bufsize - noteram_length(drv);
         }
-      while (remain < notelen);
+      while (remain <= NOTE_ALIGN(notelen));
     }
 
   head = drv->ni_head;
@@ -594,7 +594,7 @@ static void noteram_add(FAR struct note_driver_s *driver,
   space = space < notelen ? space : notelen;
   memcpy(drv->ni_buffer + head, note, space);
   memcpy(drv->ni_buffer, buf + space, notelen - space);
-  drv->ni_head = noteram_next(drv, head, notelen);
+  drv->ni_head = noteram_next(drv, head, NOTE_ALIGN(notelen));
   spin_unlock_irqrestore_wo_note(&drv->lock, flags);
 }
 
@@ -624,7 +624,7 @@ static void noteram_dump_init_context(FAR struct noteram_dump_context_s *ctx)
  * Name: get_task_name
  ****************************************************************************/
 
-static const char *get_task_name(pid_t pid)
+static FAR const char *get_task_name(pid_t pid)
 {
   FAR const char *taskname;
 
@@ -956,7 +956,7 @@ static int noteram_dump_one(FAR uint8_t *p, FAR struct lib_outstream_s *s,
       {
         FAR struct note_binary_s *nbi = (FAR struct note_binary_s *)p;
         char c = note->nc_type == NOTE_DUMP_BEGIN ? 'B' : 'E';
-        int len = note->nc_length - sizeof(struct note_binary_s);
+        int len = note->nc_length - SIZEOF_NOTE_EVENT(0);
         uintptr_t ip;
 
         ip = nbi->nbi_ip;

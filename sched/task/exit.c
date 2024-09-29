@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/task/exit.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -64,7 +66,11 @@ void _exit(int status)
    * exit through a different mechanism.
    */
 
-  group_kill_children(tcb);
+  if ((tcb->flags & TCB_FLAG_TTYPE_MASK) != TCB_FLAG_TTYPE_KERNEL)
+    {
+      group_kill_children(tcb);
+    }
+
 #endif
 
   /* Perform common task termination logic.  This will get called again later

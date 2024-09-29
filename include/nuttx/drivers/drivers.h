@@ -44,6 +44,17 @@ extern "C"
 #endif
 
 /****************************************************************************
+ * Name: drivers_early_initialize
+ *
+ * Description:
+ *   Performs one-time, early driver initialization that doesn't rely on OS
+ *   resources being ready.
+ *
+ ****************************************************************************/
+
+void drivers_early_initialize(void);
+
+/****************************************************************************
  * Name: drivers_initialize
  *
  * Description:
@@ -134,6 +145,18 @@ void devurandom_register(void);
 void devcrypto_register(void);
 
 /****************************************************************************
+ * Name: devmem_register
+ *
+ * Description:
+ *   Register devmem driver
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_DEV_MEM
+int devmem_register(void);
+#endif
+
+/****************************************************************************
  * Name: devzero_register
  *
  * Description:
@@ -208,7 +231,7 @@ int bchlib_teardown(FAR void *handle);
  *
  ****************************************************************************/
 
-ssize_t bchlib_read(FAR void *handle, FAR char *buffer, size_t offset,
+ssize_t bchlib_read(FAR void *handle, FAR char *buffer, off_t offset,
                     size_t len);
 
 /****************************************************************************
@@ -220,7 +243,7 @@ ssize_t bchlib_read(FAR void *handle, FAR char *buffer, size_t offset,
  *
  ****************************************************************************/
 
-ssize_t bchlib_write(FAR void *handle, FAR const char *buffer, size_t offset,
+ssize_t bchlib_write(FAR void *handle, FAR const char *buffer, off_t offset,
                      size_t len);
 
 /****************************************************************************

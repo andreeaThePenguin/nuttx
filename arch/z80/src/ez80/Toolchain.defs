@@ -36,7 +36,7 @@ ifeq ($(CONFIG_EZ80_TOOLCHAIN_CLANG),y)
 
 ifeq ($(CONFIG_DEBUG_SYMBOLS),y)
   ARCHASMOPTIMIZATION =
-  ARCHOPTIMIZATION = -g
+  ARCHOPTIMIZATION = $(CONFIG_DEBUG_SYMBOLS_LEVEL)
 else
   ARCHASMOPTIMIZATION =
   ARCHOPTIMIZATION =
@@ -77,6 +77,12 @@ LDFLAGS += -nostdlib
 ifeq ($(CONFIG_DEBUG_OPT_UNUSED_SECTIONS),y)
   LDFLAGS          += --gc-sections
   ARCHOPTIMIZATION += -ffunction-sections -fdata-sections
+endif
+
+# Debug --whole-archive
+
+ifeq ($(CONFIG_DEBUG_LINK_WHOLE_ARCHIVE),y)
+  LDFLAGS += --whole-archive
 endif
 
 # Debug link map

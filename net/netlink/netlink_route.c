@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/netlink/netlink_route.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -1276,7 +1278,7 @@ static int netlink_get_addr(NETLINK_HANDLE handle,
 }
 #endif
 
-#if !defined(CONFIG_NETLINK_DISABLE_NEWADDR) && defined(CONFIG_NET_IPV6)
+#if !defined(CONFIG_NETLINK_DISABLE_NEWADDR) && defined(CONFIG_NET_IPv6)
 static FAR struct netlink_response_s *
 netlink_fill_ipv6prefix(FAR struct net_driver_s *dev, int type,
                         FAR const struct icmpv6_prefixinfo_s *pinfo)
@@ -1669,7 +1671,7 @@ void netlink_neigh_notify(FAR const void *neigh, int type, int domain)
  *
  ****************************************************************************/
 
-#if !defined(CONFIG_NETLINK_DISABLE_NEWADDR) && defined(CONFIG_NET_IPV6)
+#if !defined(CONFIG_NETLINK_DISABLE_NEWADDR) && defined(CONFIG_NET_IPv6)
 void netlink_ipv6_prefix_notify(FAR struct net_driver_s *dev, int type,
                                 FAR const struct icmpv6_prefixinfo_s *pinfo)
 {

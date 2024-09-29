@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/semaphore/sem_wait.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -71,7 +73,6 @@ int nxsem_wait(FAR sem_t *sem)
 {
   FAR struct tcb_s *rtcb = this_task();
   irqstate_t flags;
-  bool switch_needed;
   int ret;
 
   /* This API should not be called from interrupt handlers & idleloop */
@@ -93,6 +94,13 @@ int nxsem_wait(FAR sem_t *sem)
   if (sem->semcount > 0)
     {
       /* It is, let the task take the semaphore. */
+
+      ret = nxsem_protect_wait(sem);
+      if (ret < 0)
+        {
+          leave_critical_section(flags);
+          return ret;
+        }
 
       sem->semcount--;
       nxsem_add_holder(sem);
@@ -159,21 +167,18 @@ int nxsem_wait(FAR sem_t *sem)
 
       DEBUGASSERT(!is_idle_task(rtcb));
 
-      /* Remove the tcb task from the ready-to-run list. */
+      /* Remove the tcb task from the running list. */
 
-      switch_needed = nxsched_remove_readytorun(rtcb, true);
+      nxsched_remove_self(rtcb);
 
       /* Add the task to the specified blocked task list */
 
       rtcb->task_state = TSTATE_WAIT_SEM;
       nxsched_add_prioritized(rtcb, SEM_WAITLIST(sem));
 
-      /* Now, perform the context switch if one is needed */
+      /* Now, perform the context switch */
 
-      if (switch_needed)
-        {
-          up_switch_context(this_task(), rtcb);
-        }
+      up_switch_context(this_task(), rtcb);
 
       /* When we resume at this point, either (1) the semaphore has been
        * assigned to this thread of execution, or (2) the semaphore wait

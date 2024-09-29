@@ -85,7 +85,7 @@ extern "C"
  ****************************************************************************/
 
 #ifdef CONFIG_NET_KSZ9477_I2C
-int ksz9477_i2c_init(struct i2c_master_s *i2c_bus,
+int ksz9477_i2c_init(FAR struct i2c_master_s *i2c_bus,
                      ksz9477_port_t master_port);
 #else
 #  error Only I2c interface currently supported
@@ -146,6 +146,27 @@ int ksz9477_disable_port_vlan(void);
 
 int ksz9477_configure_port_vlan(ksz9477_port_t port, uint8_t disable,
                                 uint8_t enable);
+
+/****************************************************************************
+ * Name: ksz9477_configure_port_mirroring
+ *
+ * Description:
+ *   Configures the port mirroring and snooping
+ *   The change will become effective next time when the switch is
+ *   initialized.
+ *
+ * Input Parameters:
+ *   port: The port being configured (1-7)
+ *   config: Bitmask to enable/disable rx/tx mirroring, sniffer port.
+ *           See header file or Port Mirroring Control Register
+ *           from datasheet for further details.
+ *
+ * Returned Value:
+ *   OK or negative error number
+ *
+ ****************************************************************************/
+
+int ksz9477_configure_port_mirroring(ksz9477_port_t port, uint8_t config);
 
 #if defined(__cplusplus)
 }

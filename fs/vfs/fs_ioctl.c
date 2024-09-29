@@ -31,6 +31,7 @@
 #include <assert.h>
 
 #include "inode/inode.h"
+#include "lock.h"
 
 /****************************************************************************
  * Private Functions
@@ -109,6 +110,29 @@ static int file_vioctl(FAR struct file *filep, int req, va_list ap)
           }
         break;
 
+      case FIOC_GETLK:
+        if (ret == -ENOTTY)
+          {
+            ret = file_getlk(filep, (FAR struct flock *)(uintptr_t)arg);
+          }
+        break;
+
+      case FIOC_SETLK:
+        if (ret == -ENOTTY)
+          {
+            ret = file_setlk(filep, (FAR struct flock *)(uintptr_t)arg,
+                             true);
+          }
+        break;
+
+      case FIOC_SETLKW:
+        if (ret == -ENOTTY)
+          {
+            ret = file_setlk(filep, (FAR struct flock *)(uintptr_t)arg,
+                             false);
+          }
+        break;
+
 #ifdef CONFIG_FDSAN
       case FIOC_SETTAG_FDSAN:
         filep->f_tag_fdsan = *(FAR uint64_t *)arg;
@@ -157,7 +181,7 @@ static int file_vioctl(FAR struct file *filep, int req, va_list ap)
                                         (unsigned long)(uintptr_t)&geo);
             if (ret >= 0)
               {
-                *(FAR blksize_t *)(uintptr_t)arg = geo.geo_nsectors;
+                *(FAR blkcnt_t *)(uintptr_t)arg = geo.geo_nsectors;
               }
           }
         break;
@@ -252,6 +276,7 @@ int ioctl(int fd, int req, ...)
   ret = file_vioctl(filep, req, ap);
   va_end(ap);
 
+  fs_putfilep(filep);
   if (ret < 0)
     {
       goto err;

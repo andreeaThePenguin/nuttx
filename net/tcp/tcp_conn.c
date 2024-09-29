@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/tcp/tcp_conn.c
  *
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  *   Copyright (C) 2007-2011, 2013-2015, 2018 Gregory Nutt. All rights
  *     reserved.
  *   Author: Gregory Nutt <gnutt@nuttx.org>
@@ -780,7 +782,7 @@ FAR struct tcp_conn_s *tcp_alloc(uint8_t domain)
   if (conn)
     {
       memset(conn, 0, sizeof(struct tcp_conn_s));
-      conn->sconn.ttl     = IP_TTL_DEFAULT;
+      conn->sconn.s_ttl   = IP_TTL_DEFAULT;
       conn->tcpstateflags = TCP_ALLOCATED;
 #if defined(CONFIG_NET_IPv4) && defined(CONFIG_NET_IPv6)
       conn->domain        = domain;
@@ -1171,7 +1173,7 @@ FAR struct tcp_conn_s *tcp_alloc_accept(FAR struct net_driver_s *dev,
 #endif
 
       conn->sconn.s_tos      = listener->sconn.s_tos;
-      conn->sconn.ttl        = listener->sconn.ttl;
+      conn->sconn.s_ttl      = listener->sconn.s_ttl;
 #if CONFIG_NET_RECV_BUFSIZE > 0
       conn->rcv_bufs         = listener->rcv_bufs;
 #endif

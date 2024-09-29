@@ -56,6 +56,10 @@
 #  include <nuttx/video/fb.h>
 #endif
 
+#ifdef CONFIG_CL_MFRC522
+#include "stm32_mfrc522.h"
+#endif
+
 #include "stm32f103_minimum.h"
 
 /* Conditional logic in stm32f103_minimum.h will determine if certain
@@ -187,7 +191,7 @@
 #ifdef CONFIG_I2C_DRIVER
 static void stm32_i2c_register(int bus)
 {
-  FAR struct i2c_master_s *i2c;
+  struct i2c_master_s *i2c;
   int ret;
 
   i2c = stm32_i2cbus_initialize(bus);

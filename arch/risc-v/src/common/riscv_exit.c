@@ -62,8 +62,6 @@ void up_exit(int status)
 
   enter_critical_section();
 
-  nxsched_dumponexit();
-
   /* Destroy the task at the head of the ready to run list. */
 
   nxtask_exit();
@@ -79,6 +77,10 @@ void up_exit(int status)
    */
 
   nxsched_resume_scheduler(tcb);
+
+  /* g_running_tasks is not valid now */
+
+  g_running_tasks[this_cpu()] = NULL;
 
   /* Then switch contexts */
 

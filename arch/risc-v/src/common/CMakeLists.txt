@@ -48,6 +48,10 @@ if(CONFIG_RISCV_MISALIGNED_HANDLER)
   list(APPEND SRCS riscv_misaligned.c)
 endif()
 
+if(CONFIG_ARCH_HAVE_DEBUG)
+  list(APPEND SRCS riscv_debug.c)
+endif()
+
 if(NOT CONFIG_BUILD_FLAT)
   list(APPEND SRCS riscv_task_start.c riscv_pthread_start.c
        riscv_signal_dispatch.c)
@@ -80,8 +84,12 @@ if(CONFIG_ARCH_RV_ISA_V)
   list(APPEND SRCS riscv_vpu.S)
 endif()
 
-if(CONFIG_ARCH_RV_ISA_A)
-  list(APPEND SRCS riscv_testset.S)
+if(CONFIG_ARCH_RV_HAVE_APLIC)
+  list(APPEND SRCS riscv_aplic.c)
+endif()
+
+if(CONFIG_ARCH_RV_HAVE_IMSIC)
+  list(APPEND SRCS riscv_imsic.c)
 endif()
 
 if(CONFIG_RISCV_SEMIHOSTING_HOSTFS)
@@ -109,7 +117,7 @@ if(CONFIG_RISCV_PERCPU_SCRATCH)
   list(APPEND SRCS riscv_percpu.c)
 endif()
 
-if(CONFIG_BUILD_KERNEL)
+if(CONFIG_ARCH_USE_S_MODE)
   add_subdirectory(supervisor)
 endif()
 

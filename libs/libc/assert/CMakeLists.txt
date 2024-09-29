@@ -18,13 +18,12 @@
 #
 # ##############################################################################
 
-set(SRCS lib_assert.c)
+set(SRCS lib_assert.c lib_stackchk.c)
 
-if(CONFIG_STACK_CANARIES)
-  list(APPEND SRCS lib_stackchk.c)
+if(CONFIG_ARCH_TOOLCHAIN_GNU AND NOT CONFIG_LTO_NONE)
+  set_source_files_properties(lib_assert.c DIRECTORY .. PROPERTIES COMPILE_FLAGS
+                                                                   -fno-lto)
+  set_source_files_properties(lib_stackchk.c DIRECTORY ..
+                              PROPERTIES COMPILE_FLAGS -fno-lto)
 endif()
-
-set_source_files_properties(lib_assert.c PROPERTIES COMPILE_FLAGS -fno-lto)
-set_source_files_properties(lib_stackchk.c PROPERTIES COMPILE_FLAGS -fno-lto)
-
 target_sources(c PRIVATE ${SRCS})

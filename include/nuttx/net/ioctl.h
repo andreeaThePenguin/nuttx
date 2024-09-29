@@ -107,6 +107,7 @@
 
 #define TUNSETIFF        _SIOC(0x0028)  /* Set TUN/TAP interface */
 #define TUNGETIFF        _SIOC(0x0035)  /* Get TUN/TAP interface */
+#define TUNSETCARRIER    _SIOC(0x0040)  /* Set TUN/TAP carrier state */
 
 /* Telnet driver ************************************************************/
 
@@ -139,6 +140,15 @@
 /* ETH Tool calls ***********************************************************/
 
 #define SIOCETHTOOL        _SIOC(0x003D)  /* Ethtool interface */
+
+/* TCP socket control *******************************************************/
+
+#define SIOCATMARK         _SIOC(0x003E)  /* Determine whether socket is at
+                                           * out-of-band mark */
+
+/* RSS notify recv cpu calls ************************************************/
+
+#define SIOCNOTIFYRECVCPU  _SIOC(0x003F)  /* RSS notify recv cpu */
 
 /****************************************************************************
  * Public Type Definitions

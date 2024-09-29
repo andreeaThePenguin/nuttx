@@ -107,6 +107,7 @@ void mpfs_jump_to_app(void)
       "la   sp, g_mpfs_boot_stacks\n"        /* Stack area base */
       "add  sp, sp, t0\n"                    /* Set stack pointer */
       "call mpfs_board_pmp_setup\n"          /* Run PMP configuration */
+      "bne  a0, x0, mpfs_board_pmp_error\n"  /* If ret != 0, jump to errhan */
       "csrr a0, mhartid\n"                   /* Restore hartid */
 #else
       "li   t0, -1\n"                        /* Open the whole SoC */
@@ -219,6 +220,30 @@ int mpfs_set_use_sbi(uint64_t hartid, bool use_sbi)
     }
 
   return ERROR;
+}
+
+/****************************************************************************
+ * Name: mpfs_get_use_sbi
+ *
+ * Description:
+ *   Get if hart boots via SBI.
+ *
+ * Input Parameters:
+ *   hartid - hart id to check
+ *
+ * Returned value:
+ *   true if SBI is used, false otherwise
+ *
+ ****************************************************************************/
+
+bool mpfs_get_use_sbi(uint64_t hartid)
+{
+  if (hartid < ENTRYPT_CNT)
+    {
+      return (g_hart_use_sbi & (1 << hartid)) != 0;
+    }
+
+  return false;
 }
 
 #endif /* CONFIG_MPFS_BOOTLOADER */

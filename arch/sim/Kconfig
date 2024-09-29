@@ -70,7 +70,7 @@ config SIM_CYGWIN_DECORATED
 config SIM_ASAN
 	bool "Address Sanitizer"
 	default n
-	depends on MM_CUSTOMIZE_MANAGER && FRAME_POINTER
+	depends on !MM_KASAN && MM_CUSTOMIZE_MANAGER && FRAME_POINTER
 	---help---
 		AddressSanitizer (ASan) is a fast compiler-based tool for detecting memory
 		bugs in native code.
@@ -78,10 +78,17 @@ config SIM_ASAN
 config SIM_UBSAN
 	bool "Undefined Behaviour Sanitizer"
 	default n
-	depends on FRAME_POINTER
+	depends on !MM_UBSAN && FRAME_POINTER
 	---help---
 		Compile-time instrumentation is used to detect various undefined behaviours
 		at runtime.
+
+config SIM_UBSAN_DUMMY
+	bool "Bypass Undefined Behaviour Sanitizer"
+	default n
+	depends on SIM_UBSAN
+	---help---
+		Keep SIM_UBSAN compile time but disable runtime actions.
 
 choice
 	prompt "X64_64 ABI"
@@ -223,6 +230,14 @@ config SIM_NETDEV_VPNKIT
 
 endchoice
 
+config SIM_NETDEV_MTU
+	int "The MTU of Simulated Network Device"
+	default 1500
+	range 1280 65535 if NET_IPv6
+	range 576 65535 if !NET_IPv6
+	---help---
+		The MTU of the network devices.
+
 config SIM_NETDEV_NUMBER
 	int "Number of Simulated Network Device"
 	default 1
@@ -299,20 +314,40 @@ choice
 config SIM_SOUND_ALSA
 	bool "alsa support on sim"
 	depends on HOST_LINUX
+	depends on AUDIOUTILS_LIBMAD
+	depends on AUDIOUTILS_LAME
 
 endchoice
 
 endif
 
+config SIM_OFFLOAD_NUM_BUFFERS
+	int "Number of offload buffers for audio processing"
+	default 2
+	---help---
+		Specifies the number of offload buffers to allocate for audio processing.
+		If Driver Specified buffer sizes is enabled (below), then the
+		low-level drivers will have the opportunity to override this
+		value.
+
+config SIM_OFFLOAD_BUFFER_NUMBYTES
+	int "Size of each offload buffer for audio processing"
+	default 32767
+	---help---
+		Specifies the allocation size for each offload buffer
+		If Driver Specified buffer sizes is enabled (below), then the
+		low-level drivers will have the opportunity to override this
+		value.
+
 config SIM_CAMERA
-	bool "Simulated video support"
+	bool "Simulated camera support"
 	depends on VIDEO
 	default y
 
 if SIM_CAMERA
 
 choice
-	prompt "Simulated video device type"
+	prompt "Simulated camera device type"
 	default SIM_CAMERA_V4L2
 
 config SIM_CAMERA_V4L2
@@ -321,8 +356,8 @@ config SIM_CAMERA_V4L2
 
 endchoice
 
-config HOST_VIDEO_DEV_PATH
-	string "Host video device path"
+config HOST_CAMERA_DEV_PATH
+	string "Host camera device path"
 	default "/dev/video0"
 
 config SIM_CAMERA_DEV_PATH
@@ -336,7 +371,10 @@ menu "Simulated v4l2m2m support"
 config SIM_VIDEO_DECODER
 	bool "Video decoder support on sim"
 	depends on VIDEO
+	depends on VIDEOUTILS_OPENH264
 	default n
+	---help---
+		v4l2m2m simlator decoder, dependent on videoutils_openh264.
 
 config SIM_VIDEO_DECODER_DEV_PATH
 	string "Video decoder device path"
@@ -346,7 +384,10 @@ config SIM_VIDEO_DECODER_DEV_PATH
 config SIM_VIDEO_ENCODER
 	bool "Video encoder support on sim"
 	depends on VIDEO
+	depends on VIDEOUTILS_LIBX264
 	default n
+	---help---
+		v4l2m2m simlator encoder, dependent on videoutils_libx264.
 
 config SIM_VIDEO_ENCODER_DEV_PATH
 	string "Video encoder device path"
@@ -387,11 +428,11 @@ config SIM_FBWIDTH
 
 config SIM_FBBPP
 	int "Pixel depth in bits"
-	default 8
+	default 32
 	---help---
 		Pixel depth in bits.  Valid choices are 4, 8, 16, 24, or 32.
 		If you use the X11 display emulation, the selected BPP must match the BPP
-		of your graphics hardware (probably 32 bits).  Default: 8
+		of your graphics hardware (probably 32 bits).  Default: 32
 
 config SIM_FRAMEBUFFER_COUNT
 	int "Framebuffer count"
@@ -400,6 +441,16 @@ config SIM_FRAMEBUFFER_COUNT
 	---help---
 		Framebuffer count.
 		Simulated frambuffer count.  Default: 2
+
+config SIM_FB_INTERVAL_LINE
+	int "The line between non-consecutive framebuffers"
+	depends on SIM_FRAMEBUFFER && SIM_FRAMEBUFFER_COUNT > 1
+	default 0
+	---help---
+		When SIM_FB_INTERVAL_LINE = 0, the framebuffers are consecutive.
+		When SIM_FB_INTERVAL_LINE > 0, the first buffer is not consecutive with
+		the second buffer, and the interval between discontinuous buffers is
+		SIM_FB_INTERVAL_LINE * stride.  Default: 0
 
 endmenu
 
@@ -778,5 +829,12 @@ config SIM_USB_PRIO
 	default 100
 
 endif
+
+config SIM_CUSTOM_DATA_SECTION
+	string "Custom data section name for Simulator"
+	default ""
+	---help---
+		Custom data section name for Simulator to allow
+		developer to define special data sections.
 
 endif # ARCH_SIM

@@ -22,16 +22,24 @@
  * Included Files
  ****************************************************************************/
 
-#include <nuttx/config.h>
 #include <nuttx/compiler.h>
 
 #include <math.h>
+
+/* Disable sincos optimization for all functions in this file,
+ * otherwise gcc would generate infinite calls.
+ * Refer to gcc PR46926.
+ * -fno-builtin-sin or -fno-builtin-cos can disable sincos optimization,
+ * but these two options do not work inside optimize pragma in-file.
+ * Thus we just enforce -O0 when compiling this file.
+ */
 
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
 
-void sincosf(float x, float *s, float *c)
+nooptimiziation_function
+void sincosf(float x, FAR float *s, FAR float *c)
 {
   *s = sinf(x);
   *c = cosf(x);

@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/signal/sig_dispatch.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -523,7 +525,7 @@ int nxsig_tcbdispatch(FAR struct tcb_s *stcb, siginfo_t *info)
        * must be unblocked when a signal is received.
        */
 
-      if (stcb->task_state == TSTATE_WAIT_MQNOTEMPTY ||
+      else if (stcb->task_state == TSTATE_WAIT_MQNOTEMPTY ||
           stcb->task_state == TSTATE_WAIT_MQNOTFULL)
         {
           nxmq_wait_irq(stcb, EINTR);
@@ -535,7 +537,7 @@ int nxsig_tcbdispatch(FAR struct tcb_s *stcb, siginfo_t *info)
        * if SIGCONT is received.
        */
 
-      if (stcb->task_state == TSTATE_TASK_STOPPED &&
+      else if (stcb->task_state == TSTATE_TASK_STOPPED &&
           info->si_signo == SIGCONT)
         {
 #ifdef HAVE_GROUP_MEMBERS
@@ -598,7 +600,7 @@ int nxsig_tcbdispatch(FAR struct tcb_s *stcb, siginfo_t *info)
  *
  ****************************************************************************/
 
-int nxsig_dispatch(pid_t pid, FAR siginfo_t *info)
+int nxsig_dispatch(pid_t pid, FAR siginfo_t *info, bool thread)
 {
 #ifdef HAVE_GROUP_MEMBERS
   FAR struct tcb_s *stcb;
@@ -629,16 +631,29 @@ int nxsig_dispatch(pid_t pid, FAR siginfo_t *info)
 
   if (group != NULL)
     {
-      /* Yes.. call group_signal() to send the signal to the correct group
-       * member.
-       */
+      if (thread)
+        {
+          /* Before the notification, we should validate the tid and
+           * and make sure that the notified thread is in same process
+           * with the current thread.
+           */
 
-      return group_signal(group, info);
+          if (stcb != NULL && group == this_task()->group)
+            {
+              return nxsig_tcbdispatch(stcb, info);
+            }
+        }
+      else
+        {
+          /* Yes.. call group_signal() to send the signal to the correct
+           * group member.
+           */
+
+          return group_signal(group, info);
+        }
     }
-  else
-    {
-      return -ESRCH;
-    }
+
+  return -ESRCH;
 
 #else
   FAR struct tcb_s *stcb;

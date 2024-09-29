@@ -73,7 +73,7 @@ void apic_timer_set(unsigned long timeout_ns)
     (unsigned long long)timeout_ns * g_x86_64_timer_freq / NS_PER_SEC;
 
 #ifdef CONFIG_ARCH_INTEL64_TSC_DEADLINE
-    write_msr(MSR_IA32_TSC_DEADLINE, rdtsc() + ticks);
+    write_msr(MSR_IA32_TSC_DEADLINE, rdtscp() + ticks);
 #else
     write_msr(MSR_X2APIC_TMICT, ticks);
 #endif
@@ -122,7 +122,7 @@ void up_timer_initialize(void)
 
   write_msr(MSR_X2APIC_LVTT, vector);
 
-  asm volatile("mfence" : : : "memory");
+  __asm__ volatile("mfence" : : : "memory");
 
   apic_timer_set(NS_PER_MSEC);
 }

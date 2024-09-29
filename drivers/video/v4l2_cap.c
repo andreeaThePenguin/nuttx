@@ -126,7 +126,7 @@ struct capture_scene_params_s
   int32_t blue;
   int32_t gamma;
   uint32_t gamma_curve_sz;
-  uint8_t *gamma_curve;
+  FAR uint8_t *gamma_curve;
   int32_t ev;
   bool    hflip_video;
   bool    vflip_video;
@@ -159,7 +159,7 @@ typedef struct capture_scene_params_s capture_scene_params_t;
 struct capture_parameter_name_s
 {
   uint32_t id;
-  const char *name;
+  FAR const char *name;
 };
 
 typedef struct capture_parameter_name_s capture_parameter_name_t;
@@ -1295,7 +1295,9 @@ static int validate_frame_setting(FAR capture_mng_t *cmng,
 
 static size_t get_bufsize(FAR video_format_t *vf)
 {
-  size_t ret = vf->width * vf->height;
+  uint32_t width  = vf->width;
+  uint32_t height = vf->height;
+  size_t ret = width * height;
 
   switch (vf->pixelformat)
     {
@@ -2132,8 +2134,7 @@ static int capture_reqbufs(FAR struct file *filep,
   FAR struct inode *inode = filep->f_inode;
   FAR capture_mng_t *cmng = inode->i_private;
   FAR capture_type_inf_t *type_inf;
-  struct imgdata_s *imgdata = cmng->imgdata;
-
+  struct imgdata_s *imgdata;
   irqstate_t flags;
   int ret = OK;
 
@@ -2142,6 +2143,7 @@ static int capture_reqbufs(FAR struct file *filep,
       return -EINVAL;
     }
 
+  imgdata  = cmng->imgdata;
   type_inf = get_capture_type_inf(cmng, reqbufs->type);
   if (type_inf == NULL)
     {
@@ -2379,10 +2381,9 @@ static int capture_dqbuf(FAR struct file *filep,
            * Therefore, Check cause.
            */
 
-          if (type_inf->wait_capture.waitend_cause == WAITEND_CAUSE_DQCANCEL)
-            {
-              return -ECANCELED;
-            }
+          DEBUGASSERT(type_inf->wait_capture.waitend_cause ==
+                      WAITEND_CAUSE_DQCANCEL);
+          return -ECANCELED;
         }
 
       type_inf->wait_capture.done_container = NULL;
@@ -2907,7 +2908,7 @@ static int capture_s_selection(FAR struct file *filep,
   FAR capture_type_inf_t *type_inf;
   uint32_t p_u32[IMGSENSOR_CLIP_NELEM];
   imgsensor_value_t val;
-  int32_t id;
+  uint32_t id;
   int ret;
 
   if (cmng == NULL || clip == NULL)
@@ -3715,8 +3716,6 @@ static int capture_unlink(FAR struct inode *inode)
       cmng->unlinked = true;
       nxmutex_unlock(&cmng->lock_open_num);
     }
-
-  nxmutex_destroy(&cmng->lock_open_num);
 
   return OK;
 }

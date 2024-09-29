@@ -1,6 +1,8 @@
 # ##############################################################################
 # sched/mqueue/CMakeLists.txt
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more contributor
 # license agreements.  See the NOTICE file distributed with this work for
 # additional information regarding copyright ownership.  The ASF licenses this
@@ -30,10 +32,8 @@ if(NOT CONFIG_DISABLE_MQUEUE)
     APPEND
     SRCS
     mq_send.c
-    mq_timedsend.c
     mq_sndinternal.c
     mq_receive.c
-    mq_timedreceive.c
     mq_rcvinternal.c
     mq_msgfree.c
     mq_msgqalloc.c

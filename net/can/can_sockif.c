@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/can/can_sockif.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -219,6 +221,16 @@ static int can_setup(FAR struct socket *psock)
        */
 
       conn->crefs = 1;
+
+      /* If Can Socket Stack recive can frame and pending on the readahead,
+       * but the application layer did not read the frame. This will cause
+       * a memory leak, and it is necessary to limit the readahead.
+       */
+
+#if CONFIG_NET_RECV_BUFSIZE > 0
+      conn->recv_buffnum = (CONFIG_NET_RECV_BUFSIZE + CONFIG_IOB_BUFSIZE - 1)
+                            / CONFIG_IOB_BUFSIZE;
+#endif
 
       /* Attach the connection instance to the socket */
 

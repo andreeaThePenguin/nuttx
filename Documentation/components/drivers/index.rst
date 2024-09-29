@@ -11,6 +11,7 @@ divided in three classes:
   character/index.rst
   block/index.rst
   special/index.rst
+  thermal/index.rst
 
 .. note::
   Device driver support depends on the *in-memory*, *pseudo*
@@ -30,6 +31,9 @@ Drivers in NuttX generally work in two distinct layers:
   * A "lower half" which is typically hardware-specific. This is
     usually implemented at the architecture or board level.
 
+Details about drivers implementation can be found in
+:doc:`../../implementation/drivers_design` and :doc:`../../implementation/device_drivers`.
+
 Subdirectories of ``nuttx/drivers``
 ===================================
 
@@ -37,7 +41,7 @@ Subdirectories of ``nuttx/drivers``
 
   1wire device drivers.
 
-* ``analog/`` :doc:`character/analog`
+* ``analog/`` :doc:`character/analog/index`
 
   This directory holds implementations of analog device drivers.
   This includes drivers for Analog to Digital Conversion (ADC) as
@@ -106,6 +110,11 @@ Subdirectories of ``nuttx/drivers``
 * ``i2s/`` :doc:`character/i2s`
 
   I2S drivers and support logic.
+
+
+* ``i3c/`` :doc:`special/i3c`
+
+  I3C drivers and support logic.
 
 * ``input/`` :doc:`character/input/index`
 
@@ -177,6 +186,10 @@ Subdirectories of ``nuttx/drivers``
 * ``notes/`` :doc:`character/note`
 
   Note Driver Support.
+
+* ``pinctrl/`` :doc:`special/pinctrl`
+
+  Configure and manage pin.
 
 * ``pipes/`` :doc:`special/pipes`
 
@@ -283,3 +296,15 @@ The following skeleton files are available:
 * ``drivers/mtd/skeleton.c`` Skeleton memory technology device drivers
 * ``drivers/net/skeleton.c`` Skeleton network/Ethernet drivers
 * ``drivers/usbhost/usbhost_skeleton.c`` Skeleton USB host class driver
+
+Drivers Early Initialization
+============================
+
+To initialize drivers early in the boot process, the :c:func:`drivers_early_initialize`
+function is introduced. This is particularly beneficial for certain drivers,
+such as SEGGER SystemView, or others that require initialization before the
+system is fully operational.
+
+It is important to note that during this early initialization phase,
+system resources are not yet available for use. This includes memory allocation,
+file systems, and any other system resources.

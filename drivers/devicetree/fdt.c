@@ -26,6 +26,7 @@
 #include <endian.h>
 #include <errno.h>
 #include <assert.h>
+#include <ctype.h>
 #include <nuttx/compiler.h>
 #include <nuttx/fdt.h>
 #include <libfdt.h>
@@ -79,7 +80,7 @@ int fdt_get_irq(FAR const void *fdt, int nodeoffset,
 }
 
 int fdt_get_irq_by_path(FAR const void *fdt, int offset,
-                        const char *path, int irqbase)
+                        FAR const char *path, int irqbase)
 {
   return fdt_get_irq(fdt, fdt_path_offset(fdt, path), offset, irqbase);
 }
@@ -123,7 +124,7 @@ uintptr_t fdt_ld_by_cells(FAR const void *value, int cells)
 }
 
 uintptr_t fdt_get_reg_base_by_name(FAR const void *fdt, int offset,
-                                   const char *reg_name)
+                                   FAR const char *reg_name)
 {
   uintptr_t addr = 0;
 
@@ -183,7 +184,7 @@ uintptr_t fdt_get_reg_base_by_path(FAR const void *fdt, FAR const char *path)
 
 bool fdt_device_is_available(FAR const void *fdt, int node)
 {
-  const char *status = fdt_getprop(fdt, node, "status", NULL);
+  FAR const char *status = fdt_getprop(fdt, node, "status", NULL);
   if (!status)
     {
       return true;
@@ -197,7 +198,7 @@ bool fdt_device_is_available(FAR const void *fdt, int node)
   return false;
 }
 
-const char *fdt_get_node_label(FAR const void *fdt, int node)
+FAR const char *fdt_get_node_label(FAR const void *fdt, int node)
 {
   int symbols_offset;
   int property_offset;
@@ -289,4 +290,96 @@ uintptr_t fdt_get_clock_frequency_from_clocks(FAR const void *fdt,
     }
 
   return fdt_get_clock_frequency(fdt, pv_offset);
+}
+
+int fdt_node_index_from_label(FAR const char *node_label, int count)
+{
+  int dev_number = 0;
+  size_t label_length;
+
+  if (!node_label)
+    {
+      return -ENOENT;
+    }
+
+  label_length = strnlen(node_label, CONFIG_PATH_MAX);
+
+  if (count > label_length || count <= 0)
+    {
+      return -EINVAL;
+    }
+
+  for (int i = 0; i < count; i++)
+    {
+      int number = atoi(&node_label[label_length - i]);
+      if (number)
+        {
+          dev_number = number;
+        }
+    }
+
+  /* atoi returns 0 on failure, so check that the number isn't actually 0 */
+
+  if (!dev_number && !isdigit(node_label[label_length - 1]))
+    {
+      return -ENOENT;
+    }
+
+  return dev_number;
+}
+
+void fdt_node_from_compat(FAR const void *fdt,
+                          FAR const char **compatible_ids,
+                          FAR void (*driver_callback)(FAR const void *fdt,
+                                                      int offset))
+{
+  int offset = 0;
+
+  DEBUGASSERT(compatible_ids);
+  DEBUGASSERT(driver_callback);
+
+  while (*compatible_ids)
+    {
+      while (true)
+        {
+          offset
+              = fdt_node_offset_by_compatible(fdt, offset, *compatible_ids);
+          if (offset == -FDT_ERR_NOTFOUND)
+            {
+              break;
+            }
+
+          if (!fdt_device_is_available(fdt, offset))
+            {
+              continue;
+            }
+
+          driver_callback(fdt, offset);
+        }
+
+      compatible_ids++;
+    }
+}
+
+int fdt_load_prop_u32(FAR const void *fdt, int offset,
+                      FAR const char *property, int index,
+                      FAR uint32_t *value)
+{
+  DEBUGASSERT(property);
+  DEBUGASSERT(value);
+
+  int length;
+  const fdt32_t *pv = fdt_getprop(fdt, offset, property, &length);
+  if (!pv)
+    {
+      return -ENOENT;
+    }
+
+  if (index >= length)
+    {
+      return -EINVAL;
+    }
+
+  *value = fdt32_ld(pv + index);
+  return OK;
 }

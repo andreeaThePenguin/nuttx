@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/sixlowpan/sixlowpan_udpsend.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -227,7 +229,7 @@ ssize_t psock_6lowpan_udp_sendto(FAR struct socket *psock,
   ipv6udp.ipv6.tcf    = 0x00;
   ipv6udp.ipv6.flow   = 0x00;
   ipv6udp.ipv6.proto  = IP_PROTO_UDP;
-  ipv6udp.ipv6.ttl    = conn->sconn.ttl;
+  ipv6udp.ipv6.ttl    = conn->sconn.s_ttl;
 
   /* The IPv6 header length field does not include the size of IPv6 IP
    * header.

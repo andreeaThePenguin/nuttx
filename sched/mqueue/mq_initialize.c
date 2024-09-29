@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/mqueue/mq_initialize.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,6 +34,21 @@
 #include "mqueue/msg.h"
 
 /****************************************************************************
+ * Private Type Definitions
+ ****************************************************************************/
+
+struct msgpool_s
+{
+#ifndef CONFIG_DISABLE_MQUEUE
+  struct mqueue_msg_s mqueue[CONFIG_PREALLOC_MQ_MSGS +
+                             CONFIG_PREALLOC_MQ_IRQ_MSGS];
+#endif
+#ifndef CONFIG_DISABLE_MQUEUE_SYSV
+  struct msgbuf_s msgbuf[CONFIG_PREALLOC_MQ_MSGS];
+#endif
+};
+
+/****************************************************************************
  * Public Data
  ****************************************************************************/
 
@@ -53,6 +70,14 @@ struct list_node g_msgfreeirq;
 #endif
 
 /****************************************************************************
+ * Private Data
+ ****************************************************************************/
+
+/* This is a pool of pre-allocated message queue buffers */
+
+static struct msgpool_s g_msgpool;
+
+/****************************************************************************
  * Private Functions
  ****************************************************************************/
 
@@ -69,8 +94,8 @@ struct list_node g_msgfreeirq;
 
 #ifndef CONFIG_DISABLE_MQUEUE
 static FAR void * mq_msgblockinit(FAR struct list_node *list,
-                                   FAR struct mqueue_msg_s *mqmsgblock,
-                                   uint16_t nmsgs, uint8_t alloc_type)
+                                  FAR struct mqueue_msg_s *mqmsgblock,
+                                  uint16_t nmsgs, uint8_t alloc_type)
 {
   int i;
   for (i = 0; i < nmsgs; i++)
@@ -125,21 +150,9 @@ static FAR void *sysv_msgblockinit(FAR struct list_node *list,
 
 void nxmq_initialize(void)
 {
-  FAR void *msg;
+  FAR void *msg = &g_msgpool;
 
   sched_trace_begin();
-
-  msg = kmm_malloc(
-#ifndef CONFIG_DISABLE_MQUEUE
-                   sizeof(struct mqueue_msg_s) *
-                   (CONFIG_PREALLOC_MQ_MSGS + CONFIG_PREALLOC_MQ_IRQ_MSGS)
-#endif
-#ifndef CONFIG_DISABLE_MQUEUE_SYSV
-                   + sizeof(struct msgbuf_s) * CONFIG_PREALLOC_MQ_MSGS
-#endif
-                   );
-
-  DEBUGASSERT(msg != NULL);
 
   /* Initialize a block of messages for general use */
 

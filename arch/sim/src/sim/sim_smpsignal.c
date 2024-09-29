@@ -74,6 +74,7 @@ static volatile spinlock_t g_cpu_resumed[CONFIG_SMP_NCPUS];
 
 static int sim_cpupause_handler(int irq, void *context, void *arg)
 {
+  struct tcb_s *tcb;
   int cpu = this_cpu();
 
   /* Check for false alarms.  Such false could occur as a consequence of
@@ -99,6 +100,12 @@ static int sim_cpupause_handler(int irq, void *context, void *arg)
 
       leave_critical_section(flags);
     }
+
+  tcb = current_task(cpu);
+  sim_savestate(tcb->xcp.regs);
+  nxsched_process_delivered(cpu);
+  tcb = current_task(cpu);
+  sim_restorestate(tcb->xcp.regs);
 
   return OK;
 }
@@ -160,7 +167,7 @@ int up_cpu_paused_save(void)
   sched_note_cpu_paused(tcb);
 #endif
 
-  /* Save the current context at CURRENT_REGS into the TCB at the head
+  /* Save the current context at current_regs into the TCB at the head
    * of the assigned task list for this CPU.
    */
 
@@ -244,10 +251,6 @@ int up_cpu_paused_restore(void)
 
   nxsched_resume_scheduler(tcb);
 
-  /* Restore the cpu lock */
-
-  restore_critical_section();
-
   /* Then switch contexts.  Any necessary address environment changes
    * will be made when the interrupt returns.
    */
@@ -267,7 +270,7 @@ int up_cpu_paused_restore(void)
 
 void host_cpu_started(void)
 {
-#ifdef CONFIG_SCHED_INSTRUMENTATION
+#ifdef CONFIG_SCHED_INSTRUMENTATION_SWITCH
   struct tcb_s *tcb = this_task();
 
   /* Notify that this CPU has started */
@@ -340,6 +343,34 @@ int sim_init_ipi(int irq)
 }
 
 /****************************************************************************
+ * Name: up_cpu_pause_async
+ *
+ * Description:
+ *   pause task execution on the CPU
+ *   check whether there are tasks delivered to specified cpu
+ *   and try to run them.
+ *
+ * Input Parameters:
+ *   cpu - The index of the CPU to be paused.
+ *
+ * Returned Value:
+ *   Zero on success; a negated errno value on failure.
+ *
+ * Assumptions:
+ *   Called from within a critical section;
+ *
+ ****************************************************************************/
+
+inline_function int up_cpu_pause_async(int cpu)
+{
+  /* Generate IRQ for CPU(cpu) */
+
+  host_send_ipi(cpu);
+
+  return OK;
+}
+
+/****************************************************************************
  * Name: up_cpu_pause
  *
  * Description:
@@ -381,9 +412,7 @@ int up_cpu_pause(int cpu)
   spin_lock(&g_cpu_wait[cpu]);
   spin_lock(&g_cpu_paused[cpu]);
 
-  /* Generate IRQ for CPU(cpu) */
-
-  host_send_ipi(cpu);
+  up_cpu_pause_async(cpu);
 
   /* Wait for the other CPU to unlock g_cpu_paused meaning that
    * it is fully paused and ready for up_cpu_resume();
@@ -447,3 +476,44 @@ int up_cpu_resume(int cpu)
 
   return OK;
 }
+
+#ifdef CONFIG_SMP
+
+/****************************************************************************
+ * Name: sim_init_func_call_ipi
+ *
+ * Description:
+ *   Attach the CPU function call request interrupt to the NuttX logic.
+ *
+ * Input Parameters:
+ *   irq - the SIGUSR2 interrupt number
+ *
+ * Returned Value:
+ *   On success returns OK (0), otherwise a negative value.
+ ****************************************************************************/
+
+int sim_init_func_call_ipi(int irq)
+{
+  up_enable_irq(irq);
+  return irq_attach(irq, nxsched_smp_call_handler, NULL);
+}
+
+/****************************************************************************
+ * Name: up_send_smp_call
+ *
+ * Description:
+ *   Notify the cpuset cpus handler function calls.
+ *
+ ****************************************************************************/
+
+void up_send_smp_call(cpu_set_t cpuset)
+{
+  int cpu;
+
+  for (; cpuset != 0; cpuset &= ~(1 << cpu))
+    {
+      cpu = ffs(cpuset) - 1;
+      host_send_func_call_ipi(cpu);
+    }
+}
+#endif

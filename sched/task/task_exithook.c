@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/task/task_exithook.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -431,6 +433,8 @@ void nxtask_exithook(FAR struct tcb_s *tcb, int status)
     {
       return;
     }
+
+  nxsched_dumponexit();
 
   /* If the task was terminated by another task, it may be in an unknown
    * state.  Make some feeble effort to recover the state.

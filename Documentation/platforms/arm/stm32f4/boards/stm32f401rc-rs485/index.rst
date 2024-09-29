@@ -501,6 +501,7 @@ rndis
 Configures the NuttShell (nsh), enables a serial console on USART6 and enables RNDIS over USB.
 NSH commands::
 
+       nsh> mount -t procfs /proc
        nsh> ping -h
 
        Usage: ping [-c <count>] [-i <interval>] [-W <timeout>] [-s <size>] <hostname>
@@ -554,4 +555,199 @@ Configures the NuttShell (nsh) over USB Serial (check usbserial configuration) a
 You can convert the value using following::
 
        Convert to cm: value/58
-       Converto to inches: value/148
+       Convert to inches: value/148
+
+ssd1309
+-------
+
+This config is used to enable support to the transparent OLED display powered by SSD1309.
+The resolution of this display is 128x64 (although the effective view is 128x56).
+
+You can wire the display to your board this way:
+
+======= =====
+OLED    PINS
+======= =====
+CS      PB7
+DC      PB8
+RESET   PB6
+SDA     PA7
+SCK     PA5
+======= =====
+
+The board profile configures the NSH over USB and you can use the fb command to test::
+
+        NuttShell (NSH) NuttX-12.5.1
+        nsh> fb
+        VideoInfo:
+              fmt: 0
+             xres: 128
+             yres: 64
+          nplanes: 1
+        PlaneInfo (plane 0):
+            fbmem: 0x200034f8
+            fblen: 1024
+           stride: 16
+          display: 0
+              bpp: 1
+        Mapped FB: 0x200034f8
+         0: (  0,  0) (128, 64)
+         1: ( 11,  5) (106, 54)
+         2: ( 22, 10) ( 84, 44)
+         3: ( 33, 15) ( 62, 34)
+         4: ( 44, 20) ( 40, 24)
+         5: ( 55, 25) ( 18, 14)
+        Test finished
+        nsh>
+
+telnetd
+-------
+
+Configures the NuttShell (nsh), enables a serial console on USART6, enables RNDIS over USB and
+enables Device Configuration over Telnet.  
+NSH commands::
+
+       nsh> mount -t procfs /proc
+       nsh> ifcong
+
+Get the ip address assigned to eth0 and convert to hexadecimal, for example 192.168.1.2
+becomes 0xC0A80102, than configure CONFIG_NETINIT_IPADDR and CONFIG_EXAMPLES_TELNETD_IPADDR,
+also configure the router address, in this example it woukd be 0xC0A80101. After theses changes
+rebuild and load the new firmware on your board::
+
+       nsh> mount -t procfs /proc
+       nsh> telnetd
+
+At your host PC, telnet to IP address for the board::
+
+       $ telnet 192.168.01.02
+
+Now you will be able to access the Device Configuration over Telnet::
+
+       Device Configuration over Telnet
+       You can add functions to setup your device
+       Type '?' and press <enter> for help
+       cfg> ?
+       Available commands:
+       help, ?   - show help
+       reset     - reset the board
+       exit      - exit shell
+
+max7219
+-------
+
+Configures the NuttShell (nsh) over USB Serial (check usbserial configuration) and enables LCD driver with
+MAX7219 for 8x8 LED matrix::
+
+       NuttShell (NSH) NuttX-12.5.1                                      
+       nsh> 
+       nsh> nxhello
+       nxhello_main: NX handle=0x20005420
+       nxhello_main: Set background color=0
+       nxhello_listener: Connected
+       nxhello_main: Screen resolution (32,8)
+       nxhello_hello: Position (3,0)
+       nxhello_main: Disconnect from the server
+       nsh>
+
+
+======= ====
+MAX7219 PINS
+======= ====
+CS      PC4
+DIN     PA7
+Clk     PA5
+======= ====
+
+As this LED matrix can be combined either horizontally or vetically,
+you can configure this using menuconfig::
+
+       Number of 8x8 LEDs matrices in the horizontal (width)
+       Number of 8x8 LEDs matrices in the vertical (height)
+
+mfrc522
+-------
+
+Configures the NuttShell (nsh) over USB Serial (check usbserial configuration) and enables RFID driver with
+MFRC522::
+
+       nsh> rfid_readuid
+       Trying to READ: Card is not present!
+       Trying to READ: Card is not present!
+       Trying to READ: RFID CARD UID = 0x3DB3F169
+
+
+======= ====
+MFRC522 PINS
+======= ====
+SCK     PA5
+MISO    PA6
+MOSI    PA7
+CS      PC5  
+======= ====
+
+The board used is based on MFRC522 NXP IC that supports contactless communication
+at 13.56 MHz and ISO/IEC 14443 A/MIFARE and NTAG.
+
+.. figure:: mfrc522_image.jpg
+   :align: center
+
+bmp280
+------
+
+Configures the NuttShell (nsh) over USB Serial (check usbserial configuration) and enables BMP280 Digital Pressure Sensor.
+BMP280 has an I2C address that can be configure by SDO. Connecting SDO to GND results in slave
+address 0x76, connection it to VDD results in slave address 0x77. This can be configured by enabling BMP280_I2C_ADDR_76 or BMP280_I2C_ADDR_77. This configuration uses I2C1 and slave address 0x77.
+
+======= =====
+SENSOR  PINS
+======= =====
+SDA     PA7
+SCK     PB8
+======= =====
+
+NSH commands::
+
+       NuttShell (NSH) NuttX-12.6.0-RC1
+       nsh> bmp280
+       Absolute pressure [hPa] = 911.400024
+       Temperature [C] = 26.110001
+       nsh> bmp280
+       Absolute pressure [hPa] = 932.650024
+       Temperature [C] = 24.490000
+       
+There is a known issue where every time the sensor is initialized, the first measurement is wrong, please check https://github.com/apache/nuttx/issues/12421 for the latest updates on this issue.
+
+lcd1602
+-------
+
+This configuration sets up the NuttShell (NSH) interface over USB Serial (refer to the usbserial
+configuration for details). It also enables I2C1 and the driver for an alphanumeric/segment LCD.
+Specifically, the setup supports a 16x2 LCD screen based on the HD44780 controller, which is
+interfaced using an I2C adapter known as the LCD Backpack, utilizing the PCF8574 chip.
+
+======= =====
+LCD     PINS
+======= =====
+SDA     PA7
+SCK     PB8
+======= =====
+
+NSH commands::
+
+       nsh> slcd "Hello NuttX"
+       Opening /dev/slcd0 for read/write access
+       Attributes:
+         rows: 2 columns: 16 nbars: 0
+         max contrast: 0 max brightness: 1
+       Clear screen
+       WRITING:
+       0000: 1b5b46                                                            .[F 
+       Set brightness to 1
+       Print [Hello NuttX]
+       WRITING:
+       0000: 1b5b471b5b30304c1b5b4548656c6c6f 204e75747458                     .[G.[00L.[EHello  NuttX
+       Test complete
+       nsh> 
+
+       

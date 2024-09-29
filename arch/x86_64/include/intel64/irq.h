@@ -34,9 +34,10 @@
 #ifndef __ASSEMBLY__
 #  include <stdint.h>
 #  include <stdbool.h>
-#  include <arch/arch.h>
 #  include <time.h>
 #endif
+
+#include <arch/arch.h>
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -345,57 +346,129 @@
 #define HPET0_IRQ    IRQ2
 #define HPET1_IRQ    IRQ8
 
+/* Use IRQ15 IRQ16 for SMP */
+
+#define SMP_IPI_IRQ  IRQ15
+#define SMP_IPI_ASYNC_IRQ  IRQ16
+
 /* Common register save structure created by up_saveusercontext() and by
  * ISR/IRQ interrupt processing.
  */
 
-#define XCPTCONTEXT_XMM_AREA_SIZE 512
-#define XMMAREA_OFFSET            (XCPTCONTEXT_XMM_AREA_SIZE / 8)
+#ifndef CONFIG_ARCH_X86_64_HAVE_XSAVE
+
+/* Only legacy area if XSAVE not supported */
+
+#  define XCPTCONTEXT_XMM_AREA_SIZE 512
+#else
+
+/* XSAVE state depneds on enabled features */
+
+#  ifdef CONFIG_ARCH_X86_64_AVX
+#    define XSTATE_AVX_STATE    X86_XSAVE_AVX
+#    define XSTATE_AVX_SIZE     XSAVE_AVX_SIZE
+#  else
+#    define XSTATE_AVX_STATE    0
+#    define XSTATE_AVX_SIZE     0
+#  endif
+
+#  ifdef CONFIG_ARCH_X86_64_AVX512
+#    define XSTATE_AVX512_STATE (X86_XSAVE_AVX512_OPMASK |  \
+                                 X86_XSAVE_AVX512_HI256 |   \
+                                 X86_XSAVE_AVX512_HI16)
+#    define XSTATE_AVX512_SIZE  (XSAVE_MXP_BNDREGS_SIZE +   \
+                                 XSAVE_MXP_BNDCSR_SIZE +    \
+                                 XSAVE_AVX512OPMASK_SIZE +  \
+                                 XSAVE_AVX512HI256_SIZE +   \
+                                 XSAVE_AVX512HI16_SIZE)
+#  else
+#    define XSTATE_AVX512_STATE 0
+#    define XSTATE_AVX512_SIZE  0
+#  endif
+
+/* State component bitmap */
+
+#  define XSAVE_STATE_COMPONENTS    (X86_XSAVE_X87 |    \
+                                     X86_XSAVE_SSE |    \
+                                     XSTATE_AVX_STATE | \
+                                     XSTATE_AVX512_STATE)
+
+/* Area for XSAVE - standard area format */
+
+#  define XCPTCONTEXT_XMM_AREA_SIZE (XSAVE_LEGACY_SIZE +  \
+                                     XSAVE_HEADER_SIZE +  \
+                                     XSTATE_AVX_SIZE +    \
+                                     XSTATE_AVX512_SIZE)
+#endif
+
+/* Align registers to 64-bytes */
+
+#ifdef CONFIG_ARCH_X86_64_AVX512
+#  define XMMAREA_REG_ALIGN (13)
+#else
+#  define XMMAREA_REG_ALIGN (7)
+#endif
+
+/* Register offset in XMMAREA */
+
+#define XMMAREA_OFFSET     (XCPTCONTEXT_XMM_AREA_SIZE / 8)
+#define XMMAREA_REG_OFFSET (XMMAREA_REG_ALIGN + XMMAREA_OFFSET)
 
 /* Data segments */
 
-#define REG_ALIGN         (0 + XMMAREA_OFFSET)  /* "    " "" "     " "" "       " "        " */
-#define REG_FS            (1 + XMMAREA_OFFSET)  /* "    " "" "     " "" "       " "        " */
-#define REG_GS            (2 + XMMAREA_OFFSET)  /* "    " "" "     " "" "       " "        " */
-#define REG_ES            (3 + XMMAREA_OFFSET)  /* "    " "" "     " "" "       " "        " */
-#define REG_DS            (4 + XMMAREA_OFFSET)  /* Data segment selector */
+#define REG_FS            (0 + XMMAREA_REG_OFFSET)  /* "    " "" "     " "" "       " "        " */
+#define REG_GS            (1 + XMMAREA_REG_OFFSET)  /* "    " "" "     " "" "       " "        " */
+#define REG_ES            (2 + XMMAREA_REG_OFFSET)  /* "    " "" "     " "" "       " "        " */
+#define REG_DS            (3 + XMMAREA_REG_OFFSET)  /* Data segment selector */
 
 /* Remaining regs */
 
-#define REG_RAX           (5 + XMMAREA_OFFSET)  /* "   " "" "   " */
-#define REG_RBX           (6 + XMMAREA_OFFSET)  /* "   " "" "   " */
-#define REG_RBP           (7 + XMMAREA_OFFSET)  /* "   " "" "   " */
-#define REG_R10           (8 + XMMAREA_OFFSET)  /* "   " "" "   " */
-#define REG_R11           (9 + XMMAREA_OFFSET)  /* "   " "" "   " */
-#define REG_R12          (10 + XMMAREA_OFFSET)  /* "   " "" "   " */
-#define REG_R13          (11 + XMMAREA_OFFSET)  /* "   " "" "   " */
-#define REG_R14          (12 + XMMAREA_OFFSET)  /* "   " "" "   " */
-#define REG_R15          (13 + XMMAREA_OFFSET)  /* "   " "" "   " */
+#define REG_RAX           (4 + XMMAREA_REG_OFFSET)  /* "   " "" "   " */
+#define REG_RBX           (5 + XMMAREA_REG_OFFSET)  /* "   " "" "   " */
+#define REG_RBP           (6 + XMMAREA_REG_OFFSET)  /* "   " "" "   " */
+#define REG_R10           (7 + XMMAREA_REG_OFFSET)  /* "   " "" "   " */
+#define REG_R11           (8 + XMMAREA_REG_OFFSET)  /* "   " "" "   " */
+#define REG_R12           (9 + XMMAREA_REG_OFFSET)  /* "   " "" "   " */
+#define REG_R13          (10 + XMMAREA_REG_OFFSET)  /* "   " "" "   " */
+#define REG_R14          (11 + XMMAREA_REG_OFFSET)  /* "   " "" "   " */
+#define REG_R15          (12 + XMMAREA_REG_OFFSET)  /* "   " "" "   " */
 
 /* ABI calling convention */
 
-#define REG_R9           (14 + XMMAREA_OFFSET)  /* "   " "" "   " */
-#define REG_R8           (15 + XMMAREA_OFFSET)  /* "   " "" "   " */
-#define REG_RCX          (16 + XMMAREA_OFFSET)  /* "   " "" "   " */
-#define REG_RDX          (17 + XMMAREA_OFFSET)  /* "   " "" "   " */
-#define REG_RSI          (18 + XMMAREA_OFFSET)  /* "   " "" "   " */
-#define REG_RDI          (19 + XMMAREA_OFFSET)  /* "   " "" "   " */
+#define REG_R9           (13 + XMMAREA_REG_OFFSET)  /* "   " "" "   " */
+#define REG_R8           (14 + XMMAREA_REG_OFFSET)  /* "   " "" "   " */
+#define REG_RCX          (15 + XMMAREA_REG_OFFSET)  /* "   " "" "   " */
+#define REG_RDX          (16 + XMMAREA_REG_OFFSET)  /* "   " "" "   " */
+#define REG_RSI          (17 + XMMAREA_REG_OFFSET)  /* "   " "" "   " */
+#define REG_RDI          (18 + XMMAREA_REG_OFFSET)  /* "   " "" "   " */
 
 /* IRQ saved */
 
-#define REG_ERRCODE      (20 + XMMAREA_OFFSET)  /* Error code */
-#define REG_RIP          (21 + XMMAREA_OFFSET)  /* Pushed by process on interrupt processing */
-#define REG_CS           (22 + XMMAREA_OFFSET)  /* "    " "" "     " "" "       " "        " */
-#define REG_RFLAGS       (23 + XMMAREA_OFFSET)  /* "    " "" "     " "" "       " "        " */
-#define REG_RSP          (24 + XMMAREA_OFFSET)  /* "    " "" "     " "" "       " "        " */
-#define REG_SS           (25 + XMMAREA_OFFSET)  /* "    " "" "     " "" "       " "        " */
+#define REG_ERRCODE      (19 + XMMAREA_REG_OFFSET)  /* Error code */
+#define REG_RIP          (20 + XMMAREA_REG_OFFSET)  /* Pushed by process on interrupt processing */
+#define REG_CS           (21 + XMMAREA_REG_OFFSET)  /* "    " "" "     " "" "       " "        " */
+#define REG_RFLAGS       (22 + XMMAREA_REG_OFFSET)  /* "    " "" "     " "" "       " "        " */
+#define REG_RSP          (23 + XMMAREA_REG_OFFSET)  /* "    " "" "     " "" "       " "        " */
+#define REG_SS           (24 + XMMAREA_REG_OFFSET)  /* "    " "" "     " "" "       " "        " */
+
+#define XMMAREA_REGS     (25)
 
 /* NOTE 2: This is not really state data.  Rather, this is just a convenient
  *   way to pass parameters from the interrupt handler to C code.
  */
 
-#define XCPTCONTEXT_REGS (26 + XCPTCONTEXT_XMM_AREA_SIZE / 8)
-#define XCPTCONTEXT_SIZE (8 * XCPTCONTEXT_REGS + XCPTCONTEXT_XMM_AREA_SIZE)
+#define XCPTCONTEXT_REGS (XMMAREA_REGS + XMMAREA_REG_ALIGN + \
+                          XCPTCONTEXT_XMM_AREA_SIZE / 8)
+
+#define XCPTCONTEXT_SIZE (8 * XCPTCONTEXT_REGS)
+
+/* Always align XCPTCONTEXT to 64-bytes to support XSAVE */
+
+#define XCPTCONTEXT_ALIGN (64)
+
+#define XCP_ALIGN_MASK    (XCPTCONTEXT_ALIGN - 1)
+#define XCP_ALIGN_DOWN(a) ((a) & ~XCP_ALIGN_MASK)
+#define XCP_ALIGN_UP(a)   (((a) + XCP_ALIGN_MASK) & ~XCP_ALIGN_MASK)
 
 /****************************************************************************
  * Public Types
@@ -428,9 +501,9 @@ struct xcptcontext
   uint64_t saved_rflags;
   uint64_t saved_rsp;
 
-  /* Register save area */
+  /* Register save area - allocated from stack in up_initial_state() */
 
-  uint64_t regs[XCPTCONTEXT_REGS] aligned_data(16);
+  uint64_t *regs;
 };
 #endif
 
@@ -446,7 +519,7 @@ static inline void setgdt(void *gdt, int size)
   gdt_ptr.limit = size;
   gdt_ptr.base = (uintptr_t)gdt;
 
-  asm volatile ("lgdt %0"::"m"(gdt_ptr):"memory");
+  __asm__ volatile ("lgdt %0"::"m"(gdt_ptr):"memory");
 }
 
 static inline void setidt(void *idt, int size)
@@ -455,7 +528,16 @@ static inline void setidt(void *idt, int size)
   idt_ptr.limit = size;
   idt_ptr.base = (uintptr_t)idt;
 
-  asm volatile ("lidt %0"::"m"(idt_ptr):"memory");
+  __asm__ volatile ("lidt %0"::"m"(idt_ptr):"memory");
+}
+
+static inline uint64_t rdtscp(void)
+{
+  uint32_t lo;
+  uint32_t hi;
+
+  __asm__ volatile("rdtscp" : "=a" (lo), "=d" (hi)::"ecx", "memory");
+  return (uint64_t)lo | (((uint64_t)hi) << 32);
 }
 
 static inline uint64_t rdtsc(void)
@@ -463,27 +545,37 @@ static inline uint64_t rdtsc(void)
   uint32_t lo;
   uint32_t hi;
 
-  asm volatile("rdtscp" : "=a" (lo), "=d" (hi)::"memory");
-  return (uint64_t)lo | (((uint64_t)hi) << 32);
-}
-
-static inline uint64_t _rdtsc(void)
-{
-  uint32_t lo;
-  uint32_t hi;
-
-  asm volatile("rdtsc" : "=a" (lo), "=d" (hi)::"memory");
+  __asm__ volatile("rdtsc" : "=a" (lo), "=d" (hi)::"memory");
   return (uint64_t)lo | (((uint64_t)hi) << 32);
 }
 
 static inline void set_pcid(uint64_t pcid)
 {
-    if (pcid < 4095)
-      {
-        asm volatile("mov %%cr3, %%rbx; andq $-4096, %%rbx; or %0, "
-                     "%%rbx; mov %%rbx, %%cr3;"
-                     ::"g"(pcid):"memory", "rbx", "rax");
-      }
+  if (pcid < 4095)
+    {
+      __asm__ volatile("mov %%cr3, %%rbx; andq $-4096, %%rbx; or %0, "
+                       "%%rbx; mov %%rbx, %%cr3;"
+                       ::"g"(pcid):"memory", "rbx", "rax");
+    }
+}
+
+static inline void set_cr3(uint64_t cr3)
+{
+  __asm__ volatile("mov %0, %%cr3" : "=rm"(cr3) : : "memory");
+}
+
+static inline uint64_t get_cr3(void)
+{
+  uint64_t cr3;
+  __asm__ volatile("mov %%cr3, %0" : "=rm"(cr3) : : "memory");
+  return cr3;
+}
+
+static inline uint64_t get_pml4(void)
+{
+  /* Aligned to a 4-KByte boundary */
+
+  return get_cr3() & 0xfffffffffffff000;
 }
 
 static inline unsigned long read_msr(unsigned int msr)
@@ -491,54 +583,54 @@ static inline unsigned long read_msr(unsigned int msr)
   uint32_t low;
   uint32_t high;
 
-  asm volatile("rdmsr" : "=a" (low), "=d" (high) : "c" (msr));
+  __asm__ volatile("rdmsr" : "=a" (low), "=d" (high) : "c" (msr));
   return low | ((unsigned long)high << 32);
 }
 
 static inline void write_msr(unsigned int msr, unsigned long val)
 {
-  asm volatile("wrmsr"
-    : /* no output */
-    : "c" (msr), "a" (val), "d" (val >> 32)
-    : "memory");
+  __asm__ volatile("wrmsr"
+                   : /* no output */
+                   : "c" (msr), "a" (val), "d" (val >> 32)
+                   : "memory");
 }
 
 static inline uint64_t read_fsbase(void)
 {
-    uint64_t val;
-  asm volatile("rdfsbase %0"
-    : "=r" (val)
-    : /* no output */
-    : "memory");
+  uint64_t val;
+  __asm__ volatile("rdfsbase %0"
+                   : "=r" (val)
+                   : /* no output */
+                   : "memory");
 
-    return val;
+  return val;
 }
 
 static inline void write_fsbase(unsigned long val)
 {
-  asm volatile("wrfsbase %0"
-    : /* no output */
-    : "r" (val)
-    : "memory");
+  __asm__ volatile("wrfsbase %0"
+                   : /* no output */
+                   : "r" (val)
+                   : "memory");
 }
 
 static inline uint64_t read_gsbase(void)
 {
-    uint64_t val;
-  asm volatile("rdgsbase %0"
-    : "=r" (val)
-    : /* no output */
-    : "memory");
+  uint64_t val;
+  __asm__ volatile("rdgsbase %0"
+                   : "=r" (val)
+                   : /* no output */
+                   : "memory");
 
-    return val;
+  return val;
 }
 
 static inline void write_gsbase(unsigned long val)
 {
-  asm volatile("wrgsbase %0"
-    : /* no output */
-    : "r" (val)
-    : "memory");
+  __asm__ volatile("wrgsbase %0"
+                   : /* no output */
+                   : "r" (val)
+                   : "memory");
 }
 
 /* Return stack pointer */
@@ -547,7 +639,7 @@ static inline uint64_t up_getsp(void)
 {
   uint64_t regval;
 
-  asm volatile(
+  __asm__ volatile(
     "\tmovq %%rsp, %0\n"
     : "=rm" (regval)
     :
@@ -561,7 +653,7 @@ static inline uint32_t up_getds(void)
 {
   uint32_t regval;
 
-  asm volatile(
+  __asm__ volatile(
     "\tmov %%ds, %0\n"
     : "=rm" (regval)
     :
@@ -573,7 +665,7 @@ static inline uint32_t up_getcs(void)
 {
   uint32_t regval;
 
-  asm volatile(
+  __asm__ volatile(
     "\tmov %%cs, %0\n"
     : "=rm" (regval)
     :
@@ -585,7 +677,7 @@ static inline uint32_t up_getss(void)
 {
   uint32_t regval;
 
-  asm volatile(
+  __asm__ volatile(
     "\tmov %%ss, %0\n"
     : "=rm" (regval)
     :
@@ -597,7 +689,7 @@ static inline uint32_t up_getes(void)
 {
   uint32_t regval;
 
-  asm volatile(
+  __asm__ volatile(
     "\tmov %%es, %0\n"
     : "=rm" (regval)
     :
@@ -609,7 +701,7 @@ static inline uint32_t up_getfs(void)
 {
   uint32_t regval;
 
-  asm volatile(
+  __asm__ volatile(
     "\tmov %%fs, %0\n"
     : "=rm" (regval)
     :
@@ -621,7 +713,7 @@ static inline uint32_t up_getgs(void)
 {
   uint32_t regval;
 
-  asm volatile(
+  __asm__ volatile(
     "\tmov %%gs, %0\n"
     : "=rm" (regval)
     :
@@ -644,7 +736,7 @@ static inline irqstate_t irqflags()
 {
   irqstate_t flags;
 
-  asm volatile(
+  __asm__ volatile(
     "\tpushfq\n"
     "\tpopq %0\n"
     : "=rm" (flags)
@@ -672,14 +764,14 @@ static inline bool up_irq_enabled(irqstate_t flags)
 
 static inline void up_irq_disable(void)
 {
-  asm volatile("cli": : :"memory");
+  __asm__ volatile("cli": : :"memory");
 }
 
 /* Enable interrupts unconditionally */
 
 static inline void up_irq_enable(void)
 {
-  asm volatile("sti": : :"memory");
+  __asm__ volatile("sti": : :"memory");
 }
 
 /* Disable interrupts, but return previous interrupt state */

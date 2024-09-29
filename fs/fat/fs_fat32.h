@@ -907,6 +907,7 @@ struct fat_file_s
   off_t    ff_startcluster;        /* Start cluster of file on media */
   off_t    ff_currentsector;       /* Current sector being operated on */
   off_t    ff_cachesector;         /* Current sector in the file buffer */
+  off_t    ff_pos;                 /* Current position in the file */
   uint8_t *ff_buffer;              /* File buffer (for partial sector accesses) */
 };
 
@@ -1076,8 +1077,8 @@ EXTERN int    fat_dirtruncate(FAR struct fat_mountpt_s *fs,
                               FAR uint8_t *direntry);
 EXTERN int    fat_dirshrink(FAR struct fat_mountpt_s *fs,
                             FAR uint8_t *direntry, off_t length);
-EXTERN int    fat_dirextend(FAR FAR struct fat_mountpt_s *fs,
-                            FAR FAR struct fat_file_s *ff, off_t length);
+EXTERN int    fat_dirextend(FAR struct fat_mountpt_s *fs,
+                            FAR struct fat_file_s *ff, off_t length);
 EXTERN int    fat_dircreate(FAR struct fat_mountpt_s *fs,
                             FAR struct fat_dirinfo_s *dirinfo);
 EXTERN int    fat_remove(FAR struct fat_mountpt_s *fs,

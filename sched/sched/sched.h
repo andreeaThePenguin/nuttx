@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/sched/sched.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -67,7 +69,7 @@
 #  define current_task(cpu)      ((FAR struct tcb_s *)list_assignedtasks(cpu)->head)
 #else
 #  define current_task(cpu)      ((FAR struct tcb_s *)list_readytorun()->head)
-#  define this_task()            (current_task(up_cpu_index()))
+#  define this_task()            (current_task(this_cpu()))
 #endif
 
 #define is_idle_task(t)          ((t)->pid < CONFIG_SMP_NCPUS)
@@ -77,7 +79,7 @@
  */
 
 #define running_task() \
-  (up_interrupt_context() ? g_running_tasks[up_cpu_index()] : this_task())
+  (up_interrupt_context() ? g_running_tasks[this_cpu()] : this_task())
 
 /* List attribute flags */
 
@@ -116,10 +118,6 @@
 #else
 #  define CRITMONITOR_PANIC(fmt, ...) _alert(fmt, ##__VA_ARGS__)
 #endif
-
-#define nxsched_pidhash()        g_pidhash
-#define nxsched_npidhash()       g_npidhash
-#define nxsched_lastpid()        g_lastpid
 
 /****************************************************************************
  * Public Type Definitions
@@ -192,11 +190,29 @@ extern dq_queue_t g_readytorun;
 extern dq_queue_t g_assignedtasks[CONFIG_SMP_NCPUS];
 #endif
 
+/* g_delivertasks is used to record the tcb that needs to be passed to
+ * another cpu for scheduling. When it is null, it means that there
+ * is no tcb that needs to be processed. When it is not null,
+ * it indicates that there is a tcb that needs to be processed.
+ */
+
+extern FAR struct tcb_s *g_delivertasks[CONFIG_SMP_NCPUS];
+
 /* g_running_tasks[] holds a references to the running task for each cpu.
  * It is valid only when up_interrupt_context() returns true.
  */
 
 extern FAR struct tcb_s *g_running_tasks[CONFIG_SMP_NCPUS];
+
+/* This is an array of task control block (TCB) for the IDLE thread of each
+ * CPU.  For the non-SMP case, this is a a single TCB; For the SMP case,
+ * there is one TCB per CPU.  NOTE: The system boots on CPU0 into the IDLE
+ * task.  The IDLE task later starts the other CPUs and spawns the user
+ * initialization task.  That user initialization task is responsible for
+ * bringing up the rest of the system.
+ */
+
+extern struct tcb_s g_idletcb[CONFIG_SMP_NCPUS];
 
 /* This is the list of all tasks that are ready-to-run, but cannot be placed
  * in the g_readytorun list because:  (1) They are higher priority than the
@@ -281,51 +297,19 @@ extern volatile clock_t g_cpuload_total;
  */
 
 #ifdef CONFIG_SMP
-/* In the multiple CPU, SMP case, disabling context switches will not give a
- * task exclusive access to the (multiple) CPU resources (at least without
- * stopping the other CPUs): Even though pre-emption is disabled, other
- * threads will still be executing on the other CPUS.
- *
- * There are additional rules for this multi-CPU case:
- *
- * 1. There is a global lock count 'g_cpu_lockset' that includes a bit for
- *    each CPU: If the bit is '1', then the corresponding CPU has the
- *    scheduler locked; if '0', then the CPU does not have the scheduler
- *    locked.
- * 2. Scheduling logic would set the bit associated with the cpu in
- *    'g_cpu_lockset' when the TCB at the head of the g_assignedtasks[cpu]
- *    list transitions has 'lockcount' > 0. This might happen when
- *    sched_lock() is called, or after a context switch that changes the
- *    TCB at the head of the g_assignedtasks[cpu] list.
- * 3. Similarly, the cpu bit in the global 'g_cpu_lockset' would be cleared
- *    when the TCB at the head of the g_assignedtasks[cpu] list has
- *    'lockcount' == 0. This might happen when sched_unlock() is called, or
- *    after a context switch that changes the TCB at the head of the
- *    g_assignedtasks[cpu] list.
- * 4. Modification of the global 'g_cpu_lockset' must be protected by a
- *    spinlock, 'g_cpu_schedlock'. That spinlock would be taken when
- *    sched_lock() is called, and released when sched_unlock() is called.
- *    This assures that the scheduler does enforce the critical section.
- *    NOTE: Because of this spinlock, there should never be more than one
- *    bit set in 'g_cpu_lockset'; attempts to set additional bits should
- *    be cause the CPU to block on the spinlock.  However, additional bits
- *    could get set in 'g_cpu_lockset' due to the context switches on the
- *    various CPUs.
- * 5. Each the time the head of a g_assignedtasks[] list changes and the
- *    scheduler modifies 'g_cpu_lockset', it must also set 'g_cpu_schedlock'
- *    depending on the new state of 'g_cpu_lockset'.
- * 5. Logic that currently uses the currently running tasks lockcount
- *    instead uses the global 'g_cpu_schedlock'. A value of SP_UNLOCKED
- *    means that no CPU has pre-emption disabled; SP_LOCKED means that at
- *    least one CPU has pre-emption disabled.
+/* Used to keep track of which CPU(s) hold the IRQ lock. */
+
+extern volatile cpu_set_t g_cpu_lockset;
+
+/* This is the spinlock that enforces critical sections when interrupts are
+ * disabled.
  */
 
-extern volatile spinlock_t g_cpu_schedlock;
+extern volatile spinlock_t g_cpu_irqlock;
 
 /* Used to keep track of which CPU(s) hold the IRQ lock. */
 
-extern volatile spinlock_t g_cpu_locksetlock;
-extern volatile cpu_set_t g_cpu_lockset;
+extern volatile cpu_set_t g_cpu_irqset;
 
 /* Used to lock tasklist to prevent from concurrent access */
 
@@ -345,6 +329,7 @@ int nxthread_create(FAR const char *name, uint8_t ttype, int priority,
 
 bool nxsched_add_readytorun(FAR struct tcb_s *rtrtcb);
 bool nxsched_remove_readytorun(FAR struct tcb_s *rtrtcb, bool merge);
+void nxsched_remove_self(FAR struct tcb_s *rtrtcb);
 bool nxsched_add_prioritized(FAR struct tcb_s *tcb, DSEG dq_queue_t *list);
 void nxsched_merge_prioritized(FAR dq_queue_t *list1, FAR dq_queue_t *list2,
                                uint8_t task_state);
@@ -366,12 +351,8 @@ int  nxsched_reprioritize(FAR struct tcb_s *tcb, int sched_priority);
 /* Support for tickless operation */
 
 #ifdef CONFIG_SCHED_TICKLESS
-unsigned int nxsched_cancel_timer(void);
-void nxsched_resume_timer(void);
 void nxsched_reassess_timer(void);
 #else
-#  define nxsched_cancel_timer() (0)
-#  define nxsched_resume_timer()
 #  define nxsched_reassess_timer()
 #endif
 
@@ -399,12 +380,34 @@ void nxsched_suspend(FAR struct tcb_s *tcb);
 #endif
 
 #ifdef CONFIG_SMP
-FAR struct tcb_s *this_task(void) noinstrument_function;
+noinstrument_function
+static inline_function FAR struct tcb_s *this_task(void)
+{
+  FAR struct tcb_s *tcb;
+  irqstate_t flags;
+
+  /* If the CPU supports suppression of interprocessor interrupts, then
+   * simple disabling interrupts will provide sufficient protection for
+   * the following operations.
+   */
+
+  flags = up_irq_save();
+
+  /* Obtain the TCB which is currently running on this CPU */
+
+  tcb = current_task(this_cpu());
+
+  /* Enable local interrupts */
+
+  up_irq_restore(flags);
+  return tcb;
+}
 
 int  nxsched_select_cpu(cpu_set_t affinity);
 int  nxsched_pause_cpu(FAR struct tcb_s *tcb);
+void nxsched_process_delivered(int cpu);
 
-#  define nxsched_islocked_global() spin_is_locked(&g_cpu_schedlock)
+#  define nxsched_islocked_global() (g_cpu_lockset != 0)
 #  define nxsched_islocked_tcb(tcb) nxsched_islocked_global()
 
 #else
@@ -425,10 +428,18 @@ void nxsched_process_cpuload_ticks(clock_t ticks);
 /* Critical section monitor */
 
 #ifdef CONFIG_SCHED_CRITMONITOR
-void nxsched_critmon_preemption(FAR struct tcb_s *tcb, bool state);
-void nxsched_critmon_csection(FAR struct tcb_s *tcb, bool state);
 void nxsched_resume_critmon(FAR struct tcb_s *tcb);
 void nxsched_suspend_critmon(FAR struct tcb_s *tcb);
+#endif
+
+#if CONFIG_SCHED_CRITMONITOR_MAXTIME_PREEMPTION >= 0
+void nxsched_critmon_preemption(FAR struct tcb_s *tcb, bool state,
+                                FAR void *caller);
+#endif
+
+#if CONFIG_SCHED_CRITMONITOR_MAXTIME_CSECTION >= 0
+void nxsched_critmon_csection(FAR struct tcb_s *tcb, bool state,
+                              FAR void *caller);
 #endif
 
 /* TCB operations */
@@ -439,5 +450,6 @@ bool nxsched_verify_tcb(FAR struct tcb_s *tcb);
 
 struct tls_info_s; /* Forward declare */
 FAR struct tls_info_s *nxsched_get_tls(FAR struct tcb_s *tcb);
+FAR char **nxsched_get_stackargs(FAR struct tcb_s *tcb);
 
 #endif /* __SCHED_SCHED_SCHED_H */

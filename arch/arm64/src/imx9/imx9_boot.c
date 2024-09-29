@@ -43,6 +43,7 @@
 #include "imx9_serial.h"
 #include "imx9_gpio.h"
 #include "imx9_lowputc.h"
+#include "imx9_system_ctl.h"
 
 /****************************************************************************
  * Private Data
@@ -57,6 +58,14 @@ static const struct arm_mmu_region g_mmu_regions[] =
   MMU_REGION_FLAT_ENTRY("DRAM0_S0",
                         CONFIG_RAMBANK1_ADDR, CONFIG_RAMBANK1_SIZE,
                         MT_NORMAL | MT_RW | MT_SECURE),
+
+  MMU_REGION_FLAT_ENTRY("OCRAM",
+                        CONFIG_OCRAM_BASE_ADDR, CONFIG_OCRAM_SIZE,
+                        MT_NORMAL | MT_RW | MT_SECURE),
+
+  MMU_REGION_FLAT_ENTRY("FSPI_PERIPHERAL",
+                        CONFIG_FSPI_PER_BASEADDR, CONFIG_FSPI_PER_SIZE,
+                        MT_DEVICE_NGNRNE | MT_RW | MT_SECURE),
 };
 
 const struct arm_mmu_config g_mmu_config =
@@ -101,6 +110,9 @@ void arm64_el_init(void)
 
 void arm64_chip_boot(void)
 {
+#ifdef CONFIG_IMX9_BOOTLOADER
+  imx9_mix_powerup();
+#endif
   /* MAP IO and DRAM, enable MMU. */
 
   arm64_mmu_init(true);
@@ -115,7 +127,7 @@ void arm64_chip_boot(void)
   imx9_lowsetup();
 #endif
 
-#if defined(CONFIG_SMP) || defined(CONFIG_ARCH_HAVE_PSCI)
+#if defined(CONFIG_ARM64_PSCI)
   arm64_psci_init("smc");
 #endif
 

@@ -312,7 +312,7 @@ config TICKET_SPINLOCK
 
 config RW_SPINLOCK
 	bool "Support read-write Spinlocks"
-	default y
+	default n
 	---help---
 		Spinlocks are spilit into read and write lock.
 		Reader can take read lock simultaneously and only one writer
@@ -339,6 +339,18 @@ config PREALLOC_IRQCHAIN
 		usage if this value is tuned to minimize such allocations.
 
 endif # IRQCHAIN
+
+config IRQ_NWORKS
+	int "Max num of active irq wqueue"
+	default 8
+	---help---
+		The max num of active irq wqueue.
+
+config IRQ_WORK_STACKSIZE
+	int "The default stack size for isr wqueue"
+	default DEFAULT_TASK_STACKSIZE
+	---help---
+		The default stack size for isr wqueue.
 
 config IRQCOUNT
 	bool
@@ -389,12 +401,6 @@ config SMP_DEFAULT_CPUSET
 		Set the Default CPU bits. The way to use the unset CPU is to call the
 		sched_setaffinity function to bind a task to the CPU. bit0 means CPU0.
 
-config SMP_CALL
-	bool "Support SMP function call"
-	default n
-	---help---
-		Enable to support SMP function call.
-
 endif # SMP
 
 choice
@@ -444,6 +450,20 @@ config INIT_ENTRYPOINT
 		The name of the entry point for user applications.  For the example
 		applications this is of the form 'app_main' where 'app' is the application
 		name. If not defined, INIT_ENTRYPOINT defaults to "main".
+
+		Note that main must take "argc" and "argv" arguments:
+
+		int main(int argc, FAR char *argv[])
+
+		Otherwise, if using a signature such as "int main(void)" a compilation
+		error will result:
+
+		> $ make
+		> CC:  CustomHello.c <command-line>: error: conflicting types for
+		> 'custom_hello_main'
+		> CustomHello.c:3:5: note: in expansion of macro 'main'
+		>     3 | int main(void)
+		>       |     ^~~~
 
 config INIT_ENTRYNAME
 	string "Application entry name"
@@ -755,13 +775,15 @@ endif # SCHED_CHILD_STATUS
 config SCHED_WAITPID
 	bool "Enable waitpid() API"
 	default n
+	depends on SCHED_HAVE_PARENT || !BUILD_KERNEL
 	---help---
 		Enables the waitpid() interface in a default, non-standard mode
 		(non-standard in the sense that the waited for PID need not be child
 		of the caller).  If SCHED_HAVE_PARENT is also defined, then this
 		setting will modify the behavior or waitpid() (making more spec
 		compliant) and will enable the waitid() and wait() interfaces as
-		well.
+		well. Note that SCHED_HAVE_PARENT must be defined in BUILD_KERNEL if
+		SCHED_WAITPID is needed.
 
 config SCHED_DUMP_LEAK
 	bool "Enable catch task memory leak"
@@ -770,6 +792,12 @@ config SCHED_DUMP_LEAK
 		When this option is enabled, the task's outstanding memory allocations
 		are printed using syslog. This helps catch any memory allocated by the
 		task that remains unreleased when the task exits.
+
+config SCHED_DUMP_ON_EXIT
+	bool "Dump all tasks state on exit"
+	default n
+	---help---
+		Dump all tasks state on exit()
 
 config SCHED_USER_IDENTITY
 	bool "Support per-task User Identity"
@@ -862,20 +890,6 @@ config PTHREAD_MUTEX_DEFAULT_PRIO_INHERIT
 
 endchoice # Default pthread mutex protocol
 
-config PTHREAD_CLEANUP_STACKSIZE
-	int "pthread cleanup stack size"
-	default 0
-	range 0 255
-	---help---
-		The maximum number of cleanup actions that may be pushed by
-		pthread_cleanup_push().
-		if 0 disable the interfaces pthread_cleanup_push() and pthread_cleanup_pop().
-		This setting will increase the size of EVERY
-		pthread task control block by about n * CONFIG_PTHREAD_CLEANUP_STACKSIZE
-		where n is the size of a pointer, 2 * sizeof(uintptr_t), this would be
-		8 for a CPU with 32-bit addressing and 4 for a CPU with 16-bit
-		addressing.
-
 config CANCELLATION_POINTS
 	bool "Cancellation points"
 	default n
@@ -933,7 +947,7 @@ config SCHED_CRITMONITOR_MAXTIME_THREAD
 
 config SCHED_CRITMONITOR_MAXTIME_WQUEUE
 	int "WORK queue max execution time"
-	default SCHED_CRITMONITOR_MAXTIME_THREAD
+	default -1
 	---help---
 		Worker execution time should be smaller than
 		SCHED_CRITMONITOR_MAXTIME_WQUEUE, or system will give a warning.
@@ -1054,7 +1068,7 @@ config SCHED_CPULOAD_EXTCLK
 
 config SCHED_CPULOAD_CRITMONITOR
 	bool "Use critical monitor"
-	depends on SCHED_CRITMONITOR
+	depends on SCHED_CRITMONITOR_MAXTIME_THREAD >= 0
 	---help---
 		Use the perfcounter in the core of the chip as a counter, no need to
 		use an external timer. Need to depend on SCHED_CRITMONITOR.
@@ -1414,6 +1428,13 @@ config SEM_PREALLOCHOLDERS
 
 endif # PRIORITY_INHERITANCE
 
+config PRIORITY_PROTECT
+	bool "Enable priority protect"
+	default n
+	---help---
+		When a thread locks a mutex it inherits the priority ceiling of the
+		mutex, which is defined by the application as a mutex attribute.
+
 menu "RTOS hooks"
 
 config BOARD_EARLY_INITIALIZE
@@ -1545,6 +1566,20 @@ config SCHED_STARTHOOK
 endmenu # RTOS hooks
 
 menu "Signal Configuration"
+
+config SIG_PREALLOC_ACTIONS
+	int "Number of pre-allocated sigactions"
+	default 4
+	---help---
+		The number of pre-allocated sigaction structures.
+
+config SIG_ALLOC_ACTIONS
+	int "Num of sigactions to allocate per time"
+	default 1
+	---help---
+		The number of sigactions to allocate per time. Note that
+		if this number is larger than 1, the allocation won't be
+		returned to the heap but kept in a free list for reuse.
 
 config SIG_PREALLOC_IRQ_ACTIONS
 	int "Number of pre-allocated irq actions"
@@ -1704,8 +1739,7 @@ config MODULE
 menu "Work queue support"
 
 config SCHED_WORKQUEUE
-#	bool "Enable worker thread"
-	bool
+	bool "Enable worker thread"
 	default n
 	---help---
 		Create dedicated "worker" threads to handle delayed or asynchronous
@@ -1937,3 +1971,20 @@ config GROUP_KILL_CHILDREN_TIMEOUT_MS
 		> 0 means wait timeout
 		= 0 means don't do kill signal
 
+config PID_INITIAL_COUNT
+	int "Initial length of pid table"
+	default 8 if DEFAULT_SMALL
+	default 16 if !DEFAULT_SMALL
+	---help---
+		This is the initial length of pid table, which the system
+		can still expand when needed. It is rounded up to power of
+		two by current implementation. If the number of threads in
+		your system is known at design time, setting this to it.
+
+config SCHED_EVENTS
+	bool "Schedule Event objects"
+	default n
+	---help---
+		This option enables event objects. Threads may wait on event
+		objects for specific events, but both threads and ISRs may deliver
+		events to event objects.

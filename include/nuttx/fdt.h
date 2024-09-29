@@ -133,7 +133,7 @@ int fdt_get_irq(FAR const void *fdt, int nodeoffset,
  ****************************************************************************/
 
 int fdt_get_irq_by_path(FAR const void *fdt, int offset,
-                        const char *path, int irqbase);
+                        FAR const char *path, int irqbase);
 
 /****************************************************************************
  * Name: fdt_get_parent_address_cells
@@ -210,7 +210,7 @@ uintptr_t fdt_ld_by_cells(FAR const void *value, int cells);
  ****************************************************************************/
 
 uintptr_t fdt_get_reg_base_by_name(FAR const void *fdt, int offset,
-                                   const char *reg_name);
+                                   FAR const char *reg_name);
 
 /****************************************************************************
  * Name: fdt_get_reg_base
@@ -304,7 +304,7 @@ bool fdt_device_is_available(FAR const void * fdt, int offset);
  *
  ****************************************************************************/
 
-const char *fdt_get_node_label(FAR const void *fdt, int offset);
+FAR const char *fdt_get_node_label(FAR const void *fdt, int offset);
 
 /****************************************************************************
  * Name: fdt_get_clock_frequency
@@ -349,5 +349,82 @@ uintptr_t fdt_get_clock_frequency(FAR const void *fdt, int offset);
 uintptr_t fdt_get_clock_frequency_from_clocks(FAR const void *fdt,
                                               int offset,
                                               int index);
+
+/****************************************************************************
+ * Name: fdt_node_index_from_label
+ *
+ * Description:
+ *  Get the node index from a device tree label.
+ *
+ * Input Parameters:
+ *  label - The device tree node_label
+ *  count - The number of characters from the end of the label to search
+ *
+ * Returns
+ *  The integer number found at the end of the label. e.g returns 4 for a
+ *  label called (i2c_4). Returns -ENOENT if an integer cannot be found.
+ *
+ ****************************************************************************/
+
+int fdt_node_index_from_label(FAR const char *node_label, int count);
+
+/****************************************************************************
+ * Name: fdt_node_from_compat
+ *
+ * Description:
+ *   Find all devices with a matching compatibility string and call a device
+ *   specific callback.
+ *
+ * Input Parameters:
+ *   fdt - The pointer to the raw FDT.
+ *   compatible_ids - NULL terminated list of compatible ids.
+ *   driver_callback - Function called on every found instance of the ID.
+ *
+ ****************************************************************************/
+
+void fdt_node_from_compat(FAR const void *fdt,
+                          FAR const char **compatible_ids,
+                          FAR void (*driver_callback)(FAR const void *fdt,
+                                                      int offset));
+
+/****************************************************************************
+ * Name: fdt_load_prop_u32
+ *
+ * Description:
+ *   Load an uint32_t type from a property at a given index
+ *
+ * Input Parameters:
+ *   fdt - The pointer to the raw FDT.
+ *   offset - The node offset
+ *   property - The property to load from.
+ *   index - The value index inside the property
+ *   value - Output parameter for found value.
+ *
+ * Returns:
+ *   OK on success, errno of failure.
+ *
+ ****************************************************************************/
+
+int fdt_load_prop_u32(FAR const void *fdt, int offset,
+                      FAR const char *property, int index,
+                      FAR uint32_t *value);
+
+/****************************************************************************
+ * Name: pci_ecam_register_from_fdt
+ *
+ * Description:
+ *   This function is used to register an ecam driver from the device tree
+ *
+ * Input Parameters:
+ *   fdt      - Device tree handle
+ *
+ * Returned Value:
+ *   Return 0 if success, nageative if failed
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_PCI
+int fdt_pci_ecam_register(FAR const void *fdt);
+#endif
 
 #endif /* __INCLUDE_NUTTX_FDT_H */

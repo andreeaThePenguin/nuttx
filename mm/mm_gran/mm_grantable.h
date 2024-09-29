@@ -1,6 +1,8 @@
 /****************************************************************************
  * mm/mm_gran/mm_grantable.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -36,7 +38,8 @@
 #define MEM2GRAN(g, m)      ((((uintptr_t)m) - g->heapstart) >> g->log2gran)
 #define GRAN2MEM(g, x)      ((((uintptr_t)x) << g->log2gran) + g->heapstart)
 
-#define GRAN_ALIGNED(g, m)  ((((uintptr_t)(m)) & GRANMASK(g)) == 0)
+#define ALIGNMASK(g)        ((1 << g->log2align) - 1)
+#define GRAN_ALIGNED(g, m)  ((((uintptr_t)(m)) & ALIGNMASK(g)) == 0)
 #define GRAN_INRANGE(g, m)  (g->heapstart <= (uintptr_t)(m) && \
                               (uintptr_t)(m) < GRANENDA(g))
 #define GRAN_PRODUCT(g, m)  (GRAN_ALIGNED(g, m) && GRAN_INRANGE(g, m))

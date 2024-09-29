@@ -214,6 +214,18 @@ pid_t up_fork(void);
 void up_initialize(void);
 
 /****************************************************************************
+ * Name: up_systempoweroff
+ *
+ * Description:
+ *   The function up_systempoweroff() will power down the MCU.  Optional!
+ *   Availability of this function is dependent upon the architecture
+ *   support.
+ *
+ ****************************************************************************/
+
+void up_systempoweroff(void) noreturn_function;
+
+/****************************************************************************
  * Name: up_systemreset
  *
  * Description:
@@ -427,7 +439,9 @@ void up_release_stack(FAR struct tcb_s *dtcb, uint8_t ttype);
  *
  ****************************************************************************/
 
+#ifndef up_switch_context
 void up_switch_context(FAR struct tcb_s *tcb, FAR struct tcb_s *rtcb);
+#endif
 
 /****************************************************************************
  * Name: up_exit
@@ -482,6 +496,14 @@ void up_dump_register(FAR void *regs);
  *
  * Returned Value:
  *   up_backtrace() returns the number of addresses returned in buffer
+ *
+ * Assumptions:
+ *   Have to make sure tcb keep safe during function executing, it means
+ *   1. Tcb have to be self or not-running.  In SMP case, the running task
+ *      PC & SP cannot be backtrace, as whose get from tcb is not the newest.
+ *   2. Tcb have to keep not be freed.  In task exiting case, have to
+ *      make sure the tcb get from pid and up_backtrace in one critical
+ *      section procedure.
  *
  ****************************************************************************/
 
@@ -749,12 +771,17 @@ void up_extraheaps_init(void);
  * Name: up_textheap_memalign
  *
  * Description:
- *   Allocate memory for text sections with the specified alignment.
+ *   Allocate memory for text with the specified alignment and sectname.
  *
  ****************************************************************************/
 
 #if defined(CONFIG_ARCH_USE_TEXT_HEAP)
+#  if defined(CONFIG_ARCH_USE_SEPARATED_SECTION)
+FAR void *up_textheap_memalign(FAR const char *sectname,
+                               size_t align, size_t size);
+#  else
 FAR void *up_textheap_memalign(size_t align, size_t size);
+#  endif
 #endif
 
 /****************************************************************************
@@ -829,12 +856,17 @@ void up_textheap_data_sync(void);
  * Name: up_dataheap_memalign
  *
  * Description:
- *   Allocate memory for data sections with the specified alignment.
+ *   Allocate memory for data with the specified alignment and sectname.
  *
  ****************************************************************************/
 
 #if defined(CONFIG_ARCH_USE_DATA_HEAP)
+#  if defined(CONFIG_ARCH_USE_SEPARATED_SECTION)
+FAR void *up_dataheap_memalign(FAR const char *sectname,
+                               size_t align, size_t size);
+#  else
 FAR void *up_dataheap_memalign(size_t align, size_t size);
+#  endif
 #endif
 
 /****************************************************************************
@@ -865,13 +897,19 @@ bool up_dataheap_heapmember(FAR void *p);
  * Name: up_copy_section
  *
  * Description:
- *   Copy section from general temporary buffer(src) to special addr(dest).
+ *   This function copies a section from a general temporary buffer (src) to
+ *   a specific address (dest). This is typically used in architectures that
+ *   require specific handling of memory sections.
+ *
+ * Input Parameters:
+ *   dest - A pointer to the destination where the data needs to be copied.
+ *   src  - A pointer to the source from where the data needs to be copied.
+ *   n    - The number of bytes to be copied from src to dest.
  *
  * Returned Value:
  *   Zero (OK) on success; a negated errno value on failure.
  *
  ****************************************************************************/
-
 #if defined(CONFIG_ARCH_USE_COPY_SECTION)
 int up_copy_section(FAR void *dest, FAR const void *src, size_t n);
 #endif
@@ -1709,7 +1747,7 @@ void up_secure_irq(int irq, bool secure);
 # define up_secure_irq(i, s)
 #endif
 
-#ifdef CONFIG_SMP_CALL
+#ifdef CONFIG_SMP
 /****************************************************************************
  * Name: up_send_smp_call
  *
@@ -2282,6 +2320,29 @@ int up_cpu_pause(int cpu);
 #endif
 
 /****************************************************************************
+ * Name: up_cpu_pause_async
+ *
+ * Description:
+ *   pause task execution on the CPU
+ *   check whether there are tasks delivered to specified cpu
+ *   and try to run them.
+ *
+ * Input Parameters:
+ *   cpu - The index of the CPU to be paused.
+ *
+ * Returned Value:
+ *   Zero on success; a negated errno value on failure.
+ *
+ * Assumptions:
+ *   Called from within a critical section;
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_SMP
+int up_cpu_pause_async(int cpu);
+#endif
+
+/****************************************************************************
  * Name: up_cpu_pausereq
  *
  * Description:
@@ -2382,7 +2443,7 @@ int up_cpu_paused_restore(void);
  *   state of the task at the head of the g_assignedtasks[cpu] list, and
  *   resume normal tasking.
  *
- *   This function is called after up_cpu_pause in order ot resume operation
+ *   This function is called after up_cpu_pause in order to resume operation
  *   of the CPU after modifying its g_assignedtasks[cpu] list.
  *
  * Input Parameters:
@@ -2523,6 +2584,22 @@ void nxsched_alarm_tick_expiration(clock_t ticks);
 #endif
 
 /****************************************************************************
+ * Name:  nxsched_get_next_expired
+ *
+ * Description:
+ *   Get the time remaining until the next timer expiration.
+ *
+ * Input Parameters:
+ *   None
+ *
+ * Returned Value:
+ *   The time remaining until the next timer expiration.
+ *
+ ****************************************************************************/
+
+clock_t nxsched_get_next_expired(void);
+
+/****************************************************************************
  * Name: nxsched_process_cpuload_ticks
  *
  * Description:
@@ -2544,7 +2621,7 @@ void nxsched_alarm_tick_expiration(clock_t ticks);
  ****************************************************************************/
 
 #ifdef CONFIG_SCHED_CPULOAD_EXTCLK
-void nxsched_process_cpuload_ticks(uint32_t ticks);
+void nxsched_process_cpuload_ticks(clock_t ticks);
 #  define nxsched_process_cpuload() nxsched_process_cpuload_ticks(1)
 #endif
 
@@ -2947,7 +3024,7 @@ bool up_fpucmp(FAR const void *saveregs1, FAR const void *saveregs2);
 #ifdef CONFIG_ARCH_HAVE_DEBUG
 
 /****************************************************************************
- * Name: up_debugpoint
+ * Name: up_debugpoint_add
  *
  * Description:
  *   Add a debugpoint.
@@ -2995,6 +3072,78 @@ int up_debugpoint_add(int type, FAR void *addr, size_t size,
  ****************************************************************************/
 
 int up_debugpoint_remove(int type, FAR void *addr, size_t size);
+
+#endif
+
+#ifdef CONFIG_PCI
+
+/****************************************************************************
+ * Name: up_alloc_irq_msi
+ *
+ * Description:
+ *  Allocate interrupts for MSI/MSI-X vector.
+ *
+ * Input Parameters:
+ *   bus - Bus that PCI device resides
+ *   irq - allocated vectors array
+ *   num - number of vectors to allocate
+ *
+ * Returned Value:
+ *   >0: success, return number of allocated vectors,
+ *   <0: A negative value errno
+ *
+ ****************************************************************************/
+
+int up_alloc_irq_msi(FAR int *num);
+
+/****************************************************************************
+ * Name: up_release_irq_msi
+ *
+ * Description:
+ *  Allocate interrupts for MSI/MSI-X vector.
+ *
+ * Input Parameters:
+ *   bus - Bus that PCI device resides
+ *   irq - vectors array to release
+ *   num - number of vectors in array
+ *
+ * Returned Value:
+ *   None
+ *
+ ****************************************************************************/
+
+void up_release_irq_msi(FAR int *irq, int num);
+
+/****************************************************************************
+ * Name: up_connect_irq
+ *
+ * Description:
+ *  Connect interrupt for MSI/MSI-X.
+ *
+ * Input Parameters:
+ *   bus - Bus that PCI device resides
+ *   irq - vectors array
+ *   num - number of vectors in array
+ *   mar - returned value for Message Address Register
+ *   mdr - returned value for Message Data Register
+ *
+ * Returned Value:
+ *   >0: success, 0: A positive value errno
+ *
+ ****************************************************************************/
+
+int up_connect_irq(FAR int *irq, int num,
+                   FAR uintptr_t *mar, FAR uint32_t *mdr);
+
+/****************************************************************************
+ * Name: up_get_legacy_irq
+ *
+ * Description:
+ *   Reserve vector for legacy
+ *
+ ****************************************************************************/
+
+int up_get_legacy_irq(uint32_t devfn, uint8_t line, uint8_t pin);
 
 #endif
 

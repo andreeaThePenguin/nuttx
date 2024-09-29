@@ -56,17 +56,18 @@
 
 struct lan9250_lower_s
 {
-  int  (*attach)(FAR const struct lan9250_lower_s *lower, xcpt_t handler,
-                 FAR void *arg);
-  void (*enable)(FAR const struct lan9250_lower_s *lower);
-  void (*disable)(FAR const struct lan9250_lower_s *lower);
+  CODE int  (*attach)(FAR const struct lan9250_lower_s *lower,
+                      xcpt_t handler, FAR void *arg);
+  CODE void (*enable)(FAR const struct lan9250_lower_s *lower);
+  CODE void (*disable)(FAR const struct lan9250_lower_s *lower);
 
   /* This function is optional and used to get a specific MAC address from
    * a MCU-specific implementation. If this function is NULL, the LAN9250
    * driver will not read the MAC from the CPU.
    */
 
-  void (*getmac)(FAR const struct lan9250_lower_s *lower, FAR uint8_t *mac);
+  CODE int (*getmac)(FAR const struct lan9250_lower_s *lower,
+                      FAR uint8_t *mac);
 };
 
 /****************************************************************************
@@ -116,6 +117,25 @@ int lan9250_initialize(
                        FAR struct qspi_dev_s *qspi,
 #endif
                        FAR const struct lan9250_lower_s *lower);
+
+/****************************************************************************
+ * Function: lan9250_uninitialize
+ *
+ * Description:
+ *   Un-initialize the Ethernet driver
+ *
+ * Input Parameters:
+ *   lower - The MCU-specific interrupt used to control low-level MCU
+ *           functions (i.e., LAN9250 GPIO interrupts).
+ *
+ * Returned Value:
+ *   OK on success; Negated errno on failure.
+ *
+ * Assumptions:
+ *
+ ****************************************************************************/
+
+int lan9250_uninitialize(FAR const struct lan9250_lower_s *lower);
 
 #undef EXTERN
 #ifdef __cplusplus

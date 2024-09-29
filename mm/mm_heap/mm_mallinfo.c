@@ -1,6 +1,8 @@
 /****************************************************************************
  * mm/mm_heap/mm_mallinfo.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -136,7 +138,7 @@ static void mallinfo_task_handler(FAR struct mm_allocnode_s *node,
 struct mallinfo mm_mallinfo(FAR struct mm_heap_s *heap)
 {
   struct mallinfo info;
-#if CONFIG_MM_HEAP_MEMPOOL_THRESHOLD != 0
+#ifdef CONFIG_MM_HEAP_MEMPOOL
   struct mallinfo poolinfo;
 #endif
 
@@ -147,7 +149,7 @@ struct mallinfo mm_mallinfo(FAR struct mm_heap_s *heap)
   info.uordblks += sizeof(struct mm_heap_s);
   info.usmblks = heap->mm_maxused + sizeof(struct mm_heap_s);
 
-#if CONFIG_MM_HEAP_MEMPOOL_THRESHOLD != 0
+#ifdef CONFIG_MM_HEAP_MEMPOOL
   poolinfo = mempool_multiple_mallinfo(heap->mm_mpool);
 
   info.uordblks -= poolinfo.fordblks;
@@ -177,7 +179,7 @@ struct mallinfo_task mm_mallinfo_task(FAR struct mm_heap_s *heap,
       0, 0
     };
 
-#if CONFIG_MM_HEAP_MEMPOOL_THRESHOLD != 0
+#ifdef CONFIG_MM_HEAP_MEMPOOL
   info = mempool_multiple_info_task(heap->mm_mpool, task);
 #endif
 
@@ -186,4 +188,41 @@ struct mallinfo_task mm_mallinfo_task(FAR struct mm_heap_s *heap,
   mm_foreach(heap, mallinfo_task_handler, &handle);
 
   return info;
+}
+
+/****************************************************************************
+ * Name: mm_heapfree
+ *
+ * Description:
+ *   Return the total free size (in bytes) in the heap
+ *
+ ****************************************************************************/
+
+size_t mm_heapfree(FAR struct mm_heap_s *heap)
+{
+  return heap->mm_heapsize - heap->mm_curused;
+}
+
+/****************************************************************************
+ * Name: mm_heapfree_largest
+ *
+ * Description:
+ *   Return the largest chunk of contiguous memory in the heap
+ *
+ ****************************************************************************/
+
+size_t mm_heapfree_largest(FAR struct mm_heap_s *heap)
+{
+  FAR struct mm_freenode_s *node;
+  for (node = heap->mm_nodelist[MM_NNODES - 1].blink; node;
+       node = node->blink)
+    {
+      size_t nodesize = MM_SIZEOF_NODE(node);
+      if (nodesize != 0)
+        {
+          return nodesize;
+        }
+    }
+
+  return 0;
 }

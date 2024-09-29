@@ -18,7 +18,7 @@
 #
 # ##############################################################################
 
-set(SRCS stm32_boot.c stm32_bringup.c)
+set(SRCS stm32_boot.c stm32_bringup.c stm32_spi.c)
 
 if(CONFIG_ARCH_LEDS)
   list(APPEND SRCS stm32_autoleds.c)
@@ -58,6 +58,14 @@ endif()
 
 if(CONFIG_USBMSC)
   list(APPEND SRCS stm32_usbmsc.c)
+endif()
+
+if(CONFIG_SENSORS_QENCODER)
+  list(APPEND SRCS stm32_qencoder.c)
+endif()
+
+if(CONFIG_CL_MFRC522)
+  list(APPEND SRCS stm32_mfrc522.c)
 endif()
 
 target_sources(board PRIVATE ${SRCS})

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # tools/mkexport.sh
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -250,6 +252,10 @@ echo "OBJCOPY          = ${OBJCOPY}" >>"${EXPORTDIR}/scripts/Make.defs"
 echo "OBJDUMP          = ${OBJDUMP}" >>"${EXPORTDIR}/scripts/Make.defs"
 echo "ZIG              = ${ZIG}" >>"${EXPORTDIR}/scripts/Make.defs"
 echo "ZIGFLAGS         = ${ZIGFLAGS}" >>"${EXPORTDIR}/scripts/Make.defs"
+echo "DC               = ${DC}" >>"${EXPORTDIR}/scripts/Make.defs"
+echo "DFLAGS           = ${DFLAGS}" >>"${EXPORTDIR}/scripts/Make.defs"
+echo "SWIFTC           = ${SWIFTC}" >>"${EXPORTDIR}/scripts/Make.defs"
+echo "SWIFTFLAGS       = ${SWIFTFLAGS}" >>"${EXPORTDIR}/scripts/Make.defs"
 echo "NXFLATLDFLAGS1   = ${NXFLATLDFLAGS1}" >>"${EXPORTDIR}/scripts/Make.defs"
 echo "NXFLATLDFLAGS2   = ${NXFLATLDFLAGS2}" >>"${EXPORTDIR}/scripts/Make.defs"
 echo "OBJEXT           = ${OBJEXT}" >>"${EXPORTDIR}/scripts/Make.defs"

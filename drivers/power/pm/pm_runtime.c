@@ -25,10 +25,13 @@
 #include <nuttx/config.h>
 
 #include <debug.h>
+#include <assert.h>
+#include <errno.h>
+#include <sched.h>
 #include <nuttx/clock.h>
+#include <nuttx/arch.h>
 #include <nuttx/power/pm_runtime.h>
-
-#include "pm.h"
+#include <sched/sched.h>
 
 /****************************************************************************
  * Private Function Prototypes
@@ -43,6 +46,26 @@ static int rpm_changestate(FAR struct pm_runtime_s *rpm, rpm_state_e state);
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
+
+static irqstate_t pm_runtime_lock(FAR rmutex_t *lock)
+{
+  if (!up_interrupt_context() && !sched_idletask())
+    {
+      nxrmutex_lock(lock);
+    }
+
+  return enter_critical_section();
+}
+
+static void pm_runtime_unlock(FAR rmutex_t *lock, irqstate_t flags)
+{
+  leave_critical_section(flags);
+
+  if (!up_interrupt_context() && !sched_idletask())
+    {
+      nxrmutex_unlock(lock);
+    }
+}
 
 static int rpm_suspend(FAR struct pm_runtime_s *rpm)
 {
@@ -73,7 +96,7 @@ static void rpm_autosuspend_cb(FAR void *arg)
   FAR struct pm_runtime_s *rpm = arg;
   irqstate_t flags;
 
-  flags = pm_lock(&rpm->lock);
+  flags = pm_runtime_lock(&rpm->lock);
 
   if (rpm->state != RPM_SUSPENDING || !work_available(&rpm->suspend_work))
     {
@@ -91,7 +114,7 @@ static void rpm_autosuspend_cb(FAR void *arg)
     }
 
 out:
-  pm_unlock(&rpm->lock, flags);
+  pm_runtime_unlock(&rpm->lock, flags);
 }
 
 static int rpm_changestate(FAR struct pm_runtime_s *rpm, rpm_state_e state)
@@ -188,7 +211,7 @@ int pm_runtime_get(FAR struct pm_runtime_s *rpm)
   int ret = 0;
 
   DEBUGASSERT(rpm != NULL);
-  flags = pm_lock(&rpm->lock);
+  flags = pm_runtime_lock(&rpm->lock);
 
   if (rpm->use_count++ > 0)
     {
@@ -205,7 +228,7 @@ int pm_runtime_get(FAR struct pm_runtime_s *rpm)
 
   rpm->state = RPM_ACTIVE;
 out:
-  pm_unlock(&rpm->lock, flags);
+  pm_runtime_unlock(&rpm->lock, flags);
   return ret;
 }
 
@@ -228,7 +251,7 @@ int pm_runtime_put(FAR struct pm_runtime_s *rpm)
   int ret = 0;
 
   DEBUGASSERT(rpm != NULL);
-  flags = pm_lock(&rpm->lock);
+  flags = pm_runtime_lock(&rpm->lock);
   if (rpm->use_count == 0)
     {
       ret = -EPERM;
@@ -250,7 +273,7 @@ int pm_runtime_put(FAR struct pm_runtime_s *rpm)
 
   rpm->state = RPM_SUSPENDED;
 out:
-  pm_unlock(&rpm->lock, flags);
+  pm_runtime_unlock(&rpm->lock, flags);
   return ret;
 }
 
@@ -274,7 +297,7 @@ int pm_runtime_put_autosuspend(FAR struct pm_runtime_s *rpm)
   int ret = 0;
 
   DEBUGASSERT(rpm != NULL);
-  flags = pm_lock(&rpm->lock);
+  flags = pm_runtime_lock(&rpm->lock);
   if (rpm->use_count == 0)
     {
       ret = -EPERM;
@@ -296,7 +319,7 @@ int pm_runtime_put_autosuspend(FAR struct pm_runtime_s *rpm)
 
   rpm->state = RPM_SUSPENDING;
 out:
-  pm_unlock(&rpm->lock, flags);
+  pm_runtime_unlock(&rpm->lock, flags);
   return ret;
 }
 
@@ -320,7 +343,7 @@ void pm_runtime_set_autosuspend_delay(FAR struct pm_runtime_s *rpm,
   irqstate_t flags;
 
   DEBUGASSERT(rpm != NULL);
-  flags = pm_lock(&rpm->lock);
+  flags = pm_runtime_lock(&rpm->lock);
   rpm->suspend_delay = delay;
-  pm_unlock(&rpm->lock, flags);
+  pm_runtime_unlock(&rpm->lock, flags);
 }

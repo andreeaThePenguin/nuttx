@@ -28,9 +28,15 @@
 #include <nuttx/config.h>
 
 #include <sys/types.h>
+#include <assert.h>
 #include <stdint.h>
 
+#include <nuttx/compiler.h>
 #include <nuttx/irq.h>
+
+#if defined(CONFIG_TICKET_SPINLOCK) || defined(CONFIG_RW_SPINLOCK)
+#  include <nuttx/atomic.h>
+#endif
 
 #undef EXTERN
 #if defined(__cplusplus)
@@ -123,6 +129,30 @@ typedef union spinlock_u spinlock_t;
  * Public Function Prototypes
  ****************************************************************************/
 
+#ifdef CONFIG_SCHED_INSTRUMENTATION_SPINLOCKS
+void sched_note_spinlock_lock(FAR volatile spinlock_t *spinlock);
+void sched_note_spinlock_locked(FAR volatile spinlock_t *spinlock);
+void sched_note_spinlock_abort(FAR volatile spinlock_t *spinlock);
+void sched_note_spinlock_unlock(FAR volatile spinlock_t *spinlock);
+#else
+#  define sched_note_spinlock_lock(spinlock)
+#  define sched_note_spinlock_locked(spinlock)
+#  define sched_note_spinlock_abort(spinlock)
+#  define sched_note_spinlock_unlock(spinlock)
+#endif
+
+/****************************************************************************
+ * Public Data Types
+ ****************************************************************************/
+
+/* Used for access control */
+
+extern volatile spinlock_t g_irq_spin;
+
+/* Handles nested calls to spin_lock_irqsave and spin_unlock_irqrestore */
+
+extern volatile uint8_t g_irq_spin_count[CONFIG_SMP_NCPUS];
+
 /****************************************************************************
  * Name: up_testset
  *
@@ -185,6 +215,47 @@ static inline spinlock_t up_testset(FAR volatile spinlock_t *lock)
 #define spin_lock_init(l) do { *(l) = SP_UNLOCKED; } while (0)
 
 /****************************************************************************
+ * Name: spin_lock_wo_note
+ *
+ * Description:
+ *   If this CPU does not already hold the spinlock, then loop until the
+ *   spinlock is successfully locked.
+ *
+ *   This implementation is the same as the above spin_lock() except that
+ *   it does not perform instrumentation logic.
+ *
+ * Input Parameters:
+ *   lock - A reference to the spinlock object to lock.
+ *
+ * Returned Value:
+ *   None.  When the function returns, the spinlock was successfully locked
+ *   by this CPU.
+ *
+ * Assumptions:
+ *   Not running at the interrupt level.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_SPINLOCK
+static inline_function void spin_lock_wo_note(FAR volatile spinlock_t *lock)
+{
+#ifdef CONFIG_TICKET_SPINLOCK
+  unsigned short ticket =
+    atomic_fetch_add((FAR atomic_ushort *)&lock->tickets.next, 1);
+  while (atomic_load((FAR atomic_ushort *)&lock->tickets.owner) != ticket)
+#else /* CONFIG_TICKET_SPINLOCK */
+  while (up_testset(lock) == SP_LOCKED)
+#endif
+    {
+      SP_DSB();
+      SP_WFE();
+    }
+
+  SP_DMB();
+}
+#endif /* CONFIG_SPINLOCK */
+
+/****************************************************************************
  * Name: spin_lock
  *
  * Description:
@@ -207,52 +278,22 @@ static inline spinlock_t up_testset(FAR volatile spinlock_t *lock)
  *
  ****************************************************************************/
 
-void spin_lock(FAR volatile spinlock_t *lock);
+#ifdef CONFIG_SPINLOCK
+static inline_function void spin_lock(FAR volatile spinlock_t *lock)
+{
+  /* Notify that we are waiting for a spinlock */
 
-/****************************************************************************
- * Name: spin_lock_wo_note
- *
- * Description:
- *   If this CPU does not already hold the spinlock, then loop until the
- *   spinlock is successfully locked.
- *
- *   This implementation is the same as the above spin_lock() except that
- *   it does not perform instrumentation logic.
- *
- * Input Parameters:
- *   lock - A reference to the spinlock object to lock.
- *
- * Returned Value:
- *   None.  When the function returns, the spinlock was successfully locked
- *   by this CPU.
- *
- * Assumptions:
- *   Not running at the interrupt level.
- *
- ****************************************************************************/
+  sched_note_spinlock_lock(lock);
 
-void spin_lock_wo_note(FAR volatile spinlock_t *lock);
+  /* Lock without trace note */
 
-/****************************************************************************
- * Name: spin_trylock
- *
- * Description:
- *   Try once to lock the spinlock.  Do not wait if the spinlock is already
- *   locked.
- *
- * Input Parameters:
- *   lock - A reference to the spinlock object to lock.
- *
- * Returned Value:
- *   SP_LOCKED   - Failure, the spinlock was already locked
- *   SP_UNLOCKED - Success, the spinlock was successfully locked
- *
- * Assumptions:
- *   Not running at the interrupt level.
- *
- ****************************************************************************/
+  spin_lock_wo_note(lock);
 
-bool spin_trylock(FAR volatile spinlock_t *lock);
+  /* Notify that we have the spinlock */
+
+  sched_note_spinlock_locked(lock);
+}
+#endif /* CONFIG_SPINLOCK */
 
 /****************************************************************************
  * Name: spin_trylock_wo_note
@@ -276,30 +317,90 @@ bool spin_trylock(FAR volatile spinlock_t *lock);
  *
  ****************************************************************************/
 
-bool spin_trylock_wo_note(FAR volatile spinlock_t *lock);
+#ifdef CONFIG_SPINLOCK
+static inline_function bool
+spin_trylock_wo_note(FAR volatile spinlock_t *lock)
+{
+#ifdef CONFIG_TICKET_SPINLOCK
+  unsigned short ticket =
+    atomic_load((FAR atomic_ushort *)&lock->tickets.next);
+
+  spinlock_t oldval =
+    {
+      {
+        ticket, ticket
+      }
+    };
+
+  spinlock_t newval =
+    {
+      {
+        ticket, ticket + 1
+      }
+    };
+
+  if (!atomic_compare_exchange_strong((FAR atomic_uint *)&lock->value,
+                                      &oldval.value, newval.value))
+#else /* CONFIG_TICKET_SPINLOCK */
+  if (up_testset(lock) == SP_LOCKED)
+#endif /* CONFIG_TICKET_SPINLOCK */
+    {
+      SP_DSB();
+      return false;
+    }
+
+  SP_DMB();
+  return true;
+}
+#endif /* CONFIG_SPINLOCK */
 
 /****************************************************************************
- * Name: spin_unlock
+ * Name: spin_trylock
  *
  * Description:
- *   Release one count on a non-reentrant spinlock.
+ *   Try once to lock the spinlock.  Do not wait if the spinlock is already
+ *   locked.
  *
  * Input Parameters:
- *   lock - A reference to the spinlock object to unlock.
+ *   lock - A reference to the spinlock object to lock.
  *
  * Returned Value:
- *   None.
+ *   SP_LOCKED   - Failure, the spinlock was already locked
+ *   SP_UNLOCKED - Success, the spinlock was successfully locked
  *
  * Assumptions:
  *   Not running at the interrupt level.
  *
  ****************************************************************************/
 
-#ifdef __SP_UNLOCK_FUNCTION
-void spin_unlock(FAR volatile spinlock_t *lock);
-#else
-#  define spin_unlock(l)  do { *(l) = SP_UNLOCKED; } while (0)
-#endif
+#ifdef CONFIG_SPINLOCK
+static inline_function bool spin_trylock(FAR volatile spinlock_t *lock)
+{
+  bool locked;
+
+  /* Notify that we are waiting for a spinlock */
+
+  sched_note_spinlock_lock(lock);
+
+  /* Try lock without trace note */
+
+  locked = spin_trylock_wo_note(lock);
+  if (locked)
+    {
+      /* Notify that we have the spinlock */
+
+      sched_note_spinlock_locked(lock);
+    }
+  else
+    {
+      /* Notify that we abort for a spinlock */
+
+      sched_note_spinlock_abort(lock);
+    }
+
+  return locked;
+}
+#endif /* CONFIG_SPINLOCK */
 
 /****************************************************************************
  * Name: spin_unlock_wo_note
@@ -321,7 +422,54 @@ void spin_unlock(FAR volatile spinlock_t *lock);
  *
  ****************************************************************************/
 
-void spin_unlock_wo_note(FAR volatile spinlock_t *lock);
+#ifdef CONFIG_SPINLOCK
+static inline_function void
+spin_unlock_wo_note(FAR volatile spinlock_t *lock)
+{
+  SP_DMB();
+#ifdef CONFIG_TICKET_SPINLOCK
+  atomic_fetch_add((FAR atomic_ushort *)&lock->tickets.owner, 1);
+#else
+  *lock = SP_UNLOCKED;
+#endif
+  SP_DSB();
+  SP_SEV();
+}
+#endif /* CONFIG_SPINLOCK */
+
+/****************************************************************************
+ * Name: spin_unlock
+ *
+ * Description:
+ *   Release one count on a non-reentrant spinlock.
+ *
+ * Input Parameters:
+ *   lock - A reference to the spinlock object to unlock.
+ *
+ * Returned Value:
+ *   None.
+ *
+ * Assumptions:
+ *   Not running at the interrupt level.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_SPINLOCK
+#  ifdef __SP_UNLOCK_FUNCTION
+static inline_function void spin_unlock(FAR volatile spinlock_t *lock)
+{
+  /* Unlock without trace note */
+
+  spin_unlock_wo_note(lock);
+
+  /* Notify that we are unlocking the spinlock */
+
+  sched_note_spinlock_unlock(lock);
+}
+#  else
+#    define spin_unlock(l)  do { *(l) = SP_UNLOCKED; } while (0)
+#  endif
+#endif /* CONFIG_SPINLOCK */
 
 /****************************************************************************
  * Name: spin_is_locked
@@ -345,52 +493,6 @@ void spin_unlock_wo_note(FAR volatile spinlock_t *lock);
 #endif
 
 /****************************************************************************
- * Name: spin_setbit
- *
- * Description:
- *   Makes setting a CPU bit in a bitset an atomic action
- *
- * Input Parameters:
- *   set     - A reference to the bitset to set the CPU bit in
- *   cpu     - The bit number to be set
- *   setlock - A reference to the lock protecting the set
- *   orlock  - Will be set to SP_LOCKED while holding setlock
- *
- * Returned Value:
- *   None
- *
- ****************************************************************************/
-
-#ifdef CONFIG_SPINLOCK
-void spin_setbit(FAR volatile cpu_set_t *set, unsigned int cpu,
-                 FAR volatile spinlock_t *setlock,
-                 FAR volatile spinlock_t *orlock);
-#endif
-
-/****************************************************************************
- * Name: spin_clrbit
- *
- * Description:
- *   Makes clearing a CPU bit in a bitset an atomic action
- *
- * Input Parameters:
- *   set     - A reference to the bitset to set the CPU bit in
- *   cpu     - The bit number to be set
- *   setlock - A reference to the lock protecting the set
- *   orlock  - Will be set to SP_UNLOCKED if all bits become cleared in set
- *
- * Returned Value:
- *   None
- *
- ****************************************************************************/
-
-#ifdef CONFIG_SPINLOCK
-void spin_clrbit(FAR volatile cpu_set_t *set, unsigned int cpu,
-                 FAR volatile spinlock_t *setlock,
-                 FAR volatile spinlock_t *orlock);
-#endif
-
-/****************************************************************************
  * Name: spin_initialize
  *
  * Description:
@@ -408,7 +510,44 @@ void spin_clrbit(FAR volatile cpu_set_t *set, unsigned int cpu,
 
 /* void spin_initialize(FAR spinlock_t *lock, spinlock_t state); */
 
-#define spin_initialize(l,s) do { *(l) = (s); } while (0)
+#define spin_initialize(l,s) do { SP_DMB(); *(l) = (s); } while (0)
+
+/****************************************************************************
+ * Name: spin_lock_irqsave_wo_note
+ *
+ * Description:
+ *   This function is no trace version of spin_lock_irqsave()
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_SPINLOCK
+static inline_function
+irqstate_t spin_lock_irqsave_wo_note(FAR volatile spinlock_t *lock)
+{
+  irqstate_t ret;
+  ret = up_irq_save();
+
+  if (NULL == lock)
+    {
+      int me = up_cpu_index();
+      if (0 == g_irq_spin_count[me])
+        {
+          spin_lock_wo_note(&g_irq_spin);
+        }
+
+      g_irq_spin_count[me]++;
+      DEBUGASSERT(0 != g_irq_spin_count[me]);
+    }
+  else
+    {
+      spin_lock_wo_note(lock);
+    }
+
+  return ret;
+}
+#else
+#  define spin_lock_irqsave_wo_note(l) ((void)(l), up_irq_save())
+#endif
 
 /****************************************************************************
  * Name: spin_lock_irqsave
@@ -443,20 +582,138 @@ void spin_clrbit(FAR volatile cpu_set_t *set, unsigned int cpu,
  *
  ****************************************************************************/
 
-#if defined(CONFIG_SPINLOCK)
-irqstate_t spin_lock_irqsave(FAR spinlock_t *lock);
+#ifdef CONFIG_SPINLOCK
+static inline_function
+irqstate_t spin_lock_irqsave(FAR volatile spinlock_t *lock)
+{
+  irqstate_t flags;
+
+  /* Notify that we are waiting for a spinlock */
+
+  sched_note_spinlock_lock(lock);
+
+  /* Lock without trace note */
+
+  flags = spin_lock_irqsave_wo_note(lock);
+
+  /* Notify that we have the spinlock */
+
+  sched_note_spinlock_locked(lock);
+
+  return flags;
+}
 #else
 #  define spin_lock_irqsave(l) ((void)(l), up_irq_save())
 #endif
 
 /****************************************************************************
- * Name: spin_lock_irqsave_wo_note
+ * Name: spin_trylock_irqsave_wo_note
+ *
+ * Description:
+ *   Try once to lock the spinlock.  Do not wait if the spinlock is already
+ *   locked.
+ *
+ *   This implementation is the same as the above spin_trylock() except that
+ *   it does not perform instrumentation logic.
+ *
+ * Input Parameters:
+ *   lock  - A reference to the spinlock object to lock.
+ *   flags - flag of interrupts status
+ *
+ * Returned Value:
+ *   SP_LOCKED   - Failure, the spinlock was already locked
+ *   SP_UNLOCKED - Success, the spinlock was successfully locked
+ *
+ * Assumptions:
+ *   Not running at the interrupt level.
+ *
  ****************************************************************************/
 
-#if defined(CONFIG_SPINLOCK)
-irqstate_t spin_lock_irqsave_wo_note(FAR spinlock_t *lock);
+#ifdef CONFIG_SPINLOCK
+#  define spin_trylock_irqsave_wo_note(l, f) \
+({ \
+  f = up_irq_save(); \
+  spin_trylock_wo_note(l) ? \
+  true : ({ up_irq_restore(f); false; }); \
+})
 #else
-#  define spin_lock_irqsave_wo_note(l) ((void)(l), up_irq_save())
+#  define spin_trylock_irqsave_wo_note(l, f) \
+({ \
+  (void)(l); \
+  f = up_irq_save(); \
+  true; \
+})
+#endif /* CONFIG_SPINLOCK */
+
+/****************************************************************************
+ * Name: spin_trylock_irqsave
+ *
+ * Description:
+ *   Try once to lock the spinlock.  Do not wait if the spinlock is already
+ *   locked.
+ *
+ * Input Parameters:
+ *   lock  - A reference to the spinlock object to lock.
+ *   flags - flag of interrupts status
+ *
+ * Returned Value:
+ *   SP_LOCKED   - Failure, the spinlock was already locked
+ *   SP_UNLOCKED - Success, the spinlock was successfully locked
+ *
+ * Assumptions:
+ *   Not running at the interrupt level.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_SPINLOCK
+#  define spin_trylock_irqsave(l, f) \
+({ \
+  f = up_irq_save(); \
+  spin_trylock(l) ? \
+  true : ({ up_irq_restore(f); false; }); \
+})
+#else
+#  define spin_trylock_irqsave(l, f) \
+({ \
+  (void)(l); \
+  f = up_irq_save(); \
+  true; \
+})
+#endif /* CONFIG_SPINLOCK */
+
+/****************************************************************************
+ * Name: spin_unlock_irqrestore_wo_note
+ *
+ * Description:
+ *   This function is no trace version of spin_unlock_irqrestore()
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_SPINLOCK
+static inline_function
+void spin_unlock_irqrestore_wo_note(FAR volatile spinlock_t *lock,
+                                    irqstate_t flags)
+{
+  if (NULL == lock)
+    {
+      int me = up_cpu_index();
+      DEBUGASSERT(0 < g_irq_spin_count[me]);
+      g_irq_spin_count[me]--;
+
+      if (0 == g_irq_spin_count[me])
+        {
+          spin_unlock_wo_note(&g_irq_spin);
+        }
+    }
+  else
+    {
+      spin_unlock_wo_note(lock);
+    }
+
+  up_irq_restore(flags);
+}
+#else
+#  define spin_unlock_irqrestore_wo_note(l, f) ((void)(l), up_irq_restore(f))
 #endif
 
 /****************************************************************************
@@ -488,20 +745,21 @@ irqstate_t spin_lock_irqsave_wo_note(FAR spinlock_t *lock);
  *
  ****************************************************************************/
 
-#if defined(CONFIG_SPINLOCK)
-void spin_unlock_irqrestore(FAR spinlock_t *lock, irqstate_t flags);
-#else
-#  define spin_unlock_irqrestore(l, f) up_irq_restore(f)
-#endif
+#ifdef CONFIG_SPINLOCK
+static inline_function
+void spin_unlock_irqrestore(FAR volatile spinlock_t *lock,
+                            irqstate_t flags)
+{
+  /* Unlock without trace note */
 
-/****************************************************************************
- * Name: spin_unlock_irqrestore_wo_note
- ****************************************************************************/
+  spin_unlock_irqrestore_wo_note(lock, flags);
 
-#if defined(CONFIG_SPINLOCK)
-void spin_unlock_irqrestore_wo_note(FAR spinlock_t *lock, irqstate_t flags);
+  /* Notify that we are unlocking the spinlock */
+
+  sched_note_spinlock_unlock(lock);
+}
 #else
-#  define spin_unlock_irqrestore_wo_note(l, f) up_irq_restore(f)
+#  define spin_unlock_irqrestore(l, f) ((void)(l), up_irq_restore(f))
 #endif
 
 #if defined(CONFIG_RW_SPINLOCK)
@@ -548,7 +806,26 @@ void spin_unlock_irqrestore_wo_note(FAR spinlock_t *lock, irqstate_t flags);
  *
  ****************************************************************************/
 
-void read_lock(FAR volatile rwlock_t *lock);
+static inline_function void read_lock(FAR volatile rwlock_t *lock)
+{
+  while (true)
+    {
+      int old = atomic_load((FAR atomic_int *)lock);
+      if (old <= RW_SP_WRITE_LOCKED)
+        {
+          DEBUGASSERT(old == RW_SP_WRITE_LOCKED);
+          SP_DSB();
+          SP_WFE();
+        }
+      else if(atomic_compare_exchange_strong((FAR atomic_int *)lock,
+                                             &old, old + 1))
+        {
+          break;
+        }
+    }
+
+  SP_DMB();
+}
 
 /****************************************************************************
  * Name: read_trylock
@@ -574,7 +851,26 @@ void read_lock(FAR volatile rwlock_t *lock);
  *
  ****************************************************************************/
 
-bool read_trylock(FAR volatile rwlock_t *lock);
+static inline_function bool read_trylock(FAR volatile rwlock_t *lock)
+{
+  while (true)
+    {
+      int old = atomic_load((FAR atomic_int *)lock);
+      if (old <= RW_SP_WRITE_LOCKED)
+        {
+          DEBUGASSERT(old == RW_SP_WRITE_LOCKED);
+          return false;
+        }
+      else if (atomic_compare_exchange_strong((FAR atomic_int *)lock,
+                                              &old, old + 1))
+        {
+          break;
+        }
+    }
+
+  SP_DMB();
+  return true;
+}
 
 /****************************************************************************
  * Name: read_unlock
@@ -593,7 +889,15 @@ bool read_trylock(FAR volatile rwlock_t *lock);
  *
  ****************************************************************************/
 
-void read_unlock(FAR volatile rwlock_t *lock);
+static inline_function void read_unlock(FAR volatile rwlock_t *lock)
+{
+  DEBUGASSERT(atomic_load((FAR atomic_int *)lock) >= RW_SP_READ_LOCKED);
+
+  SP_DMB();
+  atomic_fetch_sub((FAR atomic_int *)lock, 1);
+  SP_DSB();
+  SP_SEV();
+}
 
 /****************************************************************************
  * Name: write_lock
@@ -620,7 +924,19 @@ void read_unlock(FAR volatile rwlock_t *lock);
  *
  ****************************************************************************/
 
-void write_lock(FAR volatile rwlock_t *lock);
+static inline_function void write_lock(FAR volatile rwlock_t *lock)
+{
+  int zero = RW_SP_UNLOCKED;
+
+  while (!atomic_compare_exchange_strong((FAR atomic_int *)lock,
+                                         &zero, RW_SP_WRITE_LOCKED))
+    {
+      SP_DSB();
+      SP_WFE();
+    }
+
+  SP_DMB();
+}
 
 /****************************************************************************
  * Name: write_trylock
@@ -647,7 +963,20 @@ void write_lock(FAR volatile rwlock_t *lock);
  *
  ****************************************************************************/
 
-bool write_trylock(FAR volatile rwlock_t *lock);
+static inline_function bool write_trylock(FAR volatile rwlock_t *lock)
+{
+  int zero = RW_SP_UNLOCKED;
+
+  if (atomic_compare_exchange_strong((FAR atomic_int *)lock,
+                                     &zero, RW_SP_WRITE_LOCKED))
+    {
+      SP_DMB();
+      return true;
+    }
+
+  SP_DSB();
+  return false;
+}
 
 /****************************************************************************
  * Name: write_unlock
@@ -666,7 +995,17 @@ bool write_trylock(FAR volatile rwlock_t *lock);
  *
  ****************************************************************************/
 
-void write_unlock(FAR volatile rwlock_t *lock);
+static inline_function void write_unlock(FAR volatile rwlock_t *lock)
+{
+  /* Ensure this cpu already get write lock */
+
+  DEBUGASSERT(atomic_load((FAR atomic_int *)lock) == RW_SP_WRITE_LOCKED);
+
+  SP_DMB();
+  atomic_store((FAR atomic_int *)lock, RW_SP_UNLOCKED);
+  SP_DSB();
+  SP_SEV();
+}
 
 /****************************************************************************
  * Name: read_lock_irqsave
@@ -699,7 +1038,7 @@ void write_unlock(FAR volatile rwlock_t *lock);
  *
  ****************************************************************************/
 
-#if defined(CONFIG_SPINLOCK)
+#ifdef CONFIG_SPINLOCK
 irqstate_t read_lock_irqsave(FAR rwlock_t *lock);
 #else
 #  define read_lock_irqsave(l) ((void)(l), up_irq_save())
@@ -732,10 +1071,10 @@ irqstate_t read_lock_irqsave(FAR rwlock_t *lock);
  *
  ****************************************************************************/
 
-#if defined(CONFIG_SPINLOCK)
+#ifdef CONFIG_SPINLOCK
 void read_unlock_irqrestore(FAR rwlock_t *lock, irqstate_t flags);
 #else
-#  define read_unlock_irqrestore(l, f) up_irq_restore(f)
+#  define read_unlock_irqrestore(l, f) ((void)(l), up_irq_restore(f))
 #endif
 
 /****************************************************************************
@@ -771,7 +1110,7 @@ void read_unlock_irqrestore(FAR rwlock_t *lock, irqstate_t flags);
  *
  ****************************************************************************/
 
-#if defined(CONFIG_SPINLOCK)
+#ifdef CONFIG_SPINLOCK
 irqstate_t write_lock_irqsave(FAR rwlock_t *lock);
 #else
 #  define write_lock_irqsave(l) ((void)(l), up_irq_save())
@@ -806,10 +1145,10 @@ irqstate_t write_lock_irqsave(FAR rwlock_t *lock);
  *
  ****************************************************************************/
 
-#if defined(CONFIG_SPINLOCK)
+#ifdef CONFIG_SPINLOCK
 void write_unlock_irqrestore(FAR rwlock_t *lock, irqstate_t flags);
 #else
-#  define write_unlock_irqrestore(l, f) up_irq_restore(f)
+#  define write_unlock_irqrestore(l, f) ((void)(l), up_irq_restore(f))
 #endif
 
 #endif /* CONFIG_RW_SPINLOCK */

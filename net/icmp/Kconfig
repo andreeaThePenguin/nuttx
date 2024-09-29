@@ -7,7 +7,7 @@ menu "ICMP Networking Support"
 
 config NET_ICMP
 	bool "Enable ICMP networking"
-	default n
+	default NET_IPv4
 	---help---
 		Enable minimal ICMP support. Includes built-in support
 		for sending replies to received ECHO (ping) requests.
@@ -42,6 +42,12 @@ config NET_ICMP_SOCKET
 		Enable support for IPPROTO_ICMP sockets.  These sockets are needed
 		for application level support for sending ECHO (ping) requests and
 		receiving associated ECHO replies.
+
+config NET_ICMP_CHECKSUMS
+	bool "ICMP checksums"
+	default y
+	---help---
+		Enable/disable ICMP checksum support.
 
 if NET_ICMP_SOCKET
 

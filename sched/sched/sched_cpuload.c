@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/sched/sched_cpuload.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -111,12 +113,12 @@ void nxsched_process_taskload_ticks(FAR struct tcb_s *tcb, clock_t ticks)
        * total.
        */
 
-      for (i = 0; i < nxsched_npidhash(); i++)
+      for (i = 0; i < g_npidhash; i++)
         {
-          if (nxsched_pidhash()[i])
+          if (g_pidhash[i])
             {
-              nxsched_pidhash()[i]->ticks >>= 1;
-              total += nxsched_pidhash()[i]->ticks;
+              g_pidhash[i]->ticks >>= 1;
+              total += g_pidhash[i]->ticks;
             }
         }
 
@@ -209,11 +211,10 @@ int clock_cpuload(int pid, FAR struct cpuload_s *cpuload)
    * do this too, but this would require a little more overhead.
    */
 
-  if (nxsched_pidhash()[hash_index] &&
-      nxsched_pidhash()[hash_index]->pid == pid)
+  if (g_pidhash[hash_index] && g_pidhash[hash_index]->pid == pid)
     {
       cpuload->total  = g_cpuload_total;
-      cpuload->active = nxsched_pidhash()[hash_index]->ticks;
+      cpuload->active = g_pidhash[hash_index]->ticks;
       ret = OK;
     }
 

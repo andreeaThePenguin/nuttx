@@ -38,6 +38,7 @@ config ARCH_ARM64
 	select ARCH_HAVE_THREAD_LOCAL
 	select ARCH_HAVE_PERF_EVENTS
 	select ONESHOT
+	select LIBC_ARCH_ELF_64BIT if LIBC_ARCH_ELF
 	---help---
 		The ARM64 architectures
 
@@ -107,6 +108,7 @@ config ARCH_SIM
 	select ARCH_HAVE_TICKLESS
 	select ARCH_HAVE_POWEROFF
 	select ARCH_HAVE_TESTSET
+	select ARCH_HAVE_FORK if !HOST_WINDOWS
 	select ARCH_HAVE_SETJMP
 	select ARCH_HAVE_CUSTOMOPT
 	select ARCH_HAVE_TCBINFO
@@ -132,9 +134,14 @@ config ARCH_X86_64
 	select ARCH_HAVE_TCBINFO
 	select ARCH_HAVE_FPU
 	select ARCH_HAVE_DPFPU
+	select ARCH_HAVE_MULTICPU
 	select ARCH_HAVE_TESTSET
+	select ARCH_HAVE_INTERRUPTSTACK
 	select ARCH_HAVE_CUSTOMOPT
+	select PCI_LATE_DRIVERS_REGISTER if PCI
 	select LIBC_ARCH_ELF_64BIT if LIBC_ARCH_ELF
+	select ARCH_TOOLCHAIN_GNU
+	select ARCH_HAVE_BACKTRACE
 	---help---
 		x86-64 architectures.
 
@@ -282,43 +289,10 @@ config ARCH_TOOLCHAIN_TASKING
 	bool
 	default n
 
-choice
-	prompt "Link Time Optimization (LTO)"
-	default LTO_NONE
-	---help---
-		This option enables Link Time Optimization (LTO), which allows the
-		compiler to optimize binaries globally.
-
-		If unsure, select LTO_NONE. Note that LTO is very resource-intensive
-		so it's disabled by default.
-
-config LTO_NONE
-	bool "None"
-	---help---
-		Build the kernel normally, without Link Time Optimization (LTO).
-
-config LTO_FULL
-	bool "GNU Full LTO (EXPERIMENTAL)"
-	depends on ARCH_TOOLCHAIN_GNU
-	---help---
-		Link time optimization is implemented as a GCC front end for a bytecode
-		bytecode representation of GIMPLE that is emitted in special sections
-		of .o files. Currently, LTO support is enabled in most ELF-based systems,
-		as well as darwin, cygwin and mingw systems.
-
-config LTO_THIN
-	bool "Clang ThinLTO (EXPERIMENTAL)"
-	depends on ARCH_TOOLCHAIN_CLANG
-	---help---
-		This option enables Clang's ThinLTO, which allows for parallel
-		optimization and faster incremental compiles compared to the
-		CONFIG_LTO_FULL option. More information can be found
-		from Clang's documentation:
-
-		https://clang.llvm.org/docs/ThinLTO.html
-
-		If unsure, say Y.
-endchoice
+config ARCH_TOOLCHAIN_GHS
+	bool
+	select ARCH_TOOLCHAIN_GNU
+	default n
 
 config ARCH_GNU_NO_WEAKFUNCTIONS
 	bool
@@ -697,6 +671,14 @@ config ARCH_USE_DATA_HEAP
 		This option enables architecture-specific memory allocator
 		for dynamic data loading.
 
+config ARCH_USE_SEPARATED_SECTION
+	bool "Enable separate section allocation for dynamic loading"
+	default n
+	depends on ARCH_USE_TEXT_HEAP || ARCH_USE_DATA_HEAP
+	---help---
+		This option enables loading different sections into different
+		memory areas, allowing for different speeds.
+
 menuconfig ARCH_ADDRENV
 	bool "Address environments"
 	default n
@@ -1073,13 +1055,6 @@ config ARCH_STACKDUMP_MAX_LENGTH
 	depends on ARCH_STACKDUMP
 	default 0
 
-config DUMP_ON_EXIT
-	bool "Dump all tasks state on exit"
-	default n
-	depends on DEBUG_SCHED_INFO
-	---help---
-		Dump all tasks state on exit()
-
 config ARCH_USBDUMP
 	bool "Dump USB trace data"
 	default n
@@ -1186,6 +1161,13 @@ config ARCH_MINIMAL_VECTORTABLE
 		interrupt vector table at index 24.  if g_irqmap[42] ==
 		IRQMAPPED_MAX, then hardware interrupt vector 42 is not used and
 		if it occurs will result in an unexpected interrupt crash.
+
+config ARCH_MINIMAL_VECTORTABLE_DYNAMIC
+	bool "Dynaminc Minimal RAM usage for vector table"
+	default n
+	depends on ARCH_MINIMAL_VECTORTABLE
+	---help---
+		Use a minimum amount of RAM for the vector table.
 
 config ARCH_NUSER_INTERRUPTS
 	int "Number of interrupts"

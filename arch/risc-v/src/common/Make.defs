@@ -50,6 +50,10 @@ ifeq ($(CONFIG_RISCV_MISALIGNED_HANDLER),y)
 CMN_CSRCS += riscv_misaligned.c
 endif
 
+ifeq ($(CONFIG_ARCH_HAVE_DEBUG),y)
+CMN_CSRCS += riscv_debug.c
+endif
+
 ifneq ($(CONFIG_BUILD_FLAT),y)
 CMN_CSRCS  += riscv_task_start.c
 CMN_CSRCS  += riscv_pthread_start.c
@@ -83,8 +87,8 @@ ifeq ($(CONFIG_ARCH_RV_ISA_V),y)
 CMN_ASRCS += riscv_vpu.S
 endif
 
-ifeq ($(CONFIG_ARCH_RV_ISA_A),y)
-CMN_ASRCS += riscv_testset.S
+ifeq ($(CONFIG_ARCH_RV_HAVE_APLIC),y)
+CMN_CSRCS += riscv_aia.c
 endif
 
 ifeq ($(CONFIG_RISCV_SEMIHOSTING_HOSTFS),y)

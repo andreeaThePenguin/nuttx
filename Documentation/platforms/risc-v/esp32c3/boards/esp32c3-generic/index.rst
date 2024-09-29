@@ -53,6 +53,17 @@ All of the configurations presented below can be tested by running the following
 Where <config_name> is the name of board configuration you want to use, i.e.: nsh, buttons, wifi...
 Then use a serial console terminal like ``picocom`` configured to 115200 8N1.
 
+bmp180
+------
+
+This configuration enables the use of the BMP180 pressure sensor over I2C.
+You can check that the sensor is working by using the ``bmp180`` application::
+
+    nsh> bmp180
+    Pressure value = 91531
+    Pressure value = 91526
+    Pressure value = 91525
+
 coremark
 --------
 
@@ -83,6 +94,14 @@ We can use the interrupt pin to send a signal when the interrupt fires::
 
 The pin is configured as a rising edge interrupt, so after issuing the
 above command, connect it to 3.3V.
+
+i2c
+---
+
+This configuration can be used to scan and manipulate I2C devices.
+You can scan for all I2C devices using the following command::
+
+    nsh> i2c dev 0x00 0x7f
 
 nsh
 ---
@@ -149,6 +168,17 @@ You can set an alarm, check its progress and receive a notification after it exp
     Opening /dev/rtc0
     Alarm 0 is active with 10 seconds to expiration
     nsh> alarm_daemon: alarm 0 received
+
+spi
+--------
+
+This configuration enables the support for the SPI driver.
+You can test it by connecting MOSI and MISO pins which are GPIO7 and GPIO2
+by default to each other and running the ``spi`` example::
+
+    nsh> spi exch -b 2 "AB"
+    Sending:	AB
+    Received:	AB
 
 spiflash
 --------
@@ -240,6 +270,11 @@ To test it, just run the following command::
     nsh> wdog -i /dev/watchdogX
 
 Where X is the watchdog instance.
+
+To test the XTWDT(/dev/watchdog3) an interrupt handler needs to be
+implemented because XTWDT does not have system reset feature. To implement
+an interrupt handler `WDIOC_CAPTURE` command can be used. When interrupt
+rises, XTAL32K clock can be restored with `WDIOC_RSTCLK` command.
 
 wifi
 ----

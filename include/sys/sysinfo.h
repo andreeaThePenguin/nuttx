@@ -68,6 +68,8 @@ extern "C"
 #endif
 
 int sysinfo(FAR struct sysinfo *info);
+int get_nprocs_conf(void);
+int get_nprocs(void);
 
 #undef EXTERN
 #if defined(__cplusplus)

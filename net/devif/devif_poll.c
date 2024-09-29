@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/devif/devif_poll.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -47,6 +49,7 @@
 #include "mld/mld.h"
 #include "ipforward/ipforward.h"
 #include "sixlowpan/sixlowpan.h"
+#include "ipfilter/ipfilter.h"
 #include "ipfrag/ipfrag.h"
 #include "inet/inet.h"
 
@@ -183,6 +186,32 @@ static void devif_packet_conversion(FAR struct net_driver_s *dev,
 #else
 #  define devif_packet_conversion(dev,pkttype)
 #endif /* CONFIG_NET_6LOWPAN */
+
+/****************************************************************************
+ * Name: devif_poll_local_out
+ *
+ * Description:
+ *   Generic callback before device output to build L2 headers before sending
+ *   with packet filter for TCP/UDP/ICMP(v6).
+ *
+ * Assumptions:
+ *   This function is called from the MAC device driver with the network
+ *   locked.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_NET_IPFILTER
+static int devif_poll_local_out(FAR struct net_driver_s *dev,
+                                devif_poll_callback_t callback)
+{
+  /* Maybe we need to reply REJECT to ourself, so filter before loopback. */
+
+  ipfilter_out(dev);
+  return devif_poll_out(dev, callback);
+}
+#else
+#  define devif_poll_local_out(dev, callback) devif_poll_out(dev, callback)
+#endif /* CONFIG_NET_IPFILTER */
 
 /****************************************************************************
  * Name: devif_poll_pkt_connections
@@ -397,7 +426,7 @@ static inline int devif_poll_icmp(FAR struct net_driver_s *dev,
 
           /* Call back into the driver */
 
-          bstop = devif_poll_out(dev, callback);
+          bstop = devif_poll_local_out(dev, callback);
         }
     }
 
@@ -444,7 +473,7 @@ static inline int devif_poll_icmpv6(FAR struct net_driver_s *dev,
 
           /* Call back into the driver */
 
-          bstop = devif_poll_out(dev, callback);
+          bstop = devif_poll_local_out(dev, callback);
         }
     }
   while (!bstop && (conn = icmpv6_nextconn(conn)) != NULL);
@@ -581,7 +610,7 @@ static int devif_poll_udp_connections(FAR struct net_driver_s *dev,
 
           /* Call back into the driver */
 
-          bstop = devif_poll_out(dev, callback);
+          bstop = devif_poll_local_out(dev, callback);
         }
     }
 
@@ -626,7 +655,7 @@ static inline int devif_poll_tcp_connections(FAR struct net_driver_s *dev,
 
           /* Call back into the driver */
 
-          bstop = devif_poll_out(dev, callback);
+          bstop = devif_poll_local_out(dev, callback);
         }
     }
 

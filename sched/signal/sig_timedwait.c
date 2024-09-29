@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/signal/sig_timedwait.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -249,8 +251,7 @@ int nxsig_timedwait(FAR const sigset_t *set, FAR struct siginfo *info,
   FAR sigpendq_t *sigpend;
   irqstate_t flags;
   sclock_t waitticks;
-  bool switch_needed;
-  siginfo_t sinfo;
+  siginfo_t unbinfo;
   int ret;
 
   DEBUGASSERT(set != NULL);
@@ -318,7 +319,7 @@ int nxsig_timedwait(FAR const sigset_t *set, FAR struct siginfo *info,
         }
 #endif
 
-      rtcb->sigunbinfo = (info == NULL) ? &sinfo : info;
+      rtcb->sigunbinfo = (info == NULL) ? &unbinfo : info;
 
       /* Check if we should wait for the timeout */
 
@@ -362,7 +363,7 @@ int nxsig_timedwait(FAR const sigset_t *set, FAR struct siginfo *info,
 
               /* Remove the tcb task from the ready-to-run list. */
 
-              switch_needed = nxsched_remove_readytorun(rtcb, true);
+              nxsched_remove_self(rtcb);
 
               /* Add the task to the specified blocked task list */
 
@@ -371,10 +372,7 @@ int nxsig_timedwait(FAR const sigset_t *set, FAR struct siginfo *info,
 
               /* Now, perform the context switch if one is needed */
 
-              if (switch_needed)
-                {
-                  up_switch_context(this_task(), rtcb);
-                }
+              up_switch_context(this_task(), rtcb);
 
               /* We no longer need the watchdog */
 
@@ -404,21 +402,18 @@ int nxsig_timedwait(FAR const sigset_t *set, FAR struct siginfo *info,
 
           DEBUGASSERT(!is_idle_task(rtcb));
 
-          /* Remove the tcb task from the ready-to-run list. */
+          /* Remove the tcb task from the running list. */
 
-          switch_needed = nxsched_remove_readytorun(rtcb, true);
+          nxsched_remove_self(rtcb);
 
           /* Add the task to the specified blocked task list */
 
           rtcb->task_state = TSTATE_WAIT_SIG;
           dq_addlast((FAR dq_entry_t *)rtcb, list_waitingforsignal());
 
-          /* Now, perform the context switch if one is needed */
+          /* Now, perform the context switch */
 
-          if (switch_needed)
-            {
-              up_switch_context(this_task(), rtcb);
-            }
+          up_switch_context(this_task(), rtcb);
         }
 
       /* We are running again, clear the sigwaitmask */

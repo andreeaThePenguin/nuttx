@@ -61,6 +61,8 @@ typedef CODE FAR void *(*mempool_alloc_t)(FAR struct mempool_s *pool,
                                           size_t size);
 typedef CODE void (*mempool_free_t)(FAR struct mempool_s *pool,
                                     FAR void *addr);
+typedef CODE void (*mempool_check_t)(FAR struct mempool_s *pool,
+                                     FAR void *addr);
 
 typedef CODE FAR void *(*mempool_multiple_alloc_t)(FAR void *arg,
                                                    size_t alignment,
@@ -100,6 +102,7 @@ struct mempool_s
   FAR void  *priv;          /* This pointer is used to store the user's private data */
   mempool_alloc_t alloc;    /* The alloc function for mempool */
   mempool_free_t  free;     /* The free function for mempool */
+  mempool_check_t check;    /* The check function for mempool */
 
   /* Private data for memory pool */
 
@@ -107,13 +110,9 @@ struct mempool_s
   sq_queue_t queue;   /* The free block queue in normal mempool */
   sq_queue_t iqueue;  /* The free block queue in interrupt mempool */
   sq_queue_t equeue;  /* The expand block queue for normal mempool */
-#if CONFIG_MM_BACKTRACE >= 0
-  struct list_node alist;     /* The used block list in mempool */
-#else
-  size_t     nalloc;    /* The number of used block in mempool */
-#endif
-  spinlock_t lock;      /* The protect lock to mempool */
-  sem_t      waitsem;   /* The semaphore of waiter get free block */
+  size_t     nalloc;  /* The number of used block in mempool */
+  spinlock_t lock;    /* The protect lock to mempool */
+  sem_t      waitsem; /* The semaphore of waiter get free block */
 #if defined(CONFIG_FS_PROCFS) && !defined(CONFIG_FS_PROCFS_EXCLUDE_MEMPOOL)
   struct mempool_procfs_entry_s procfs; /* The entry of procfs */
 #endif
@@ -122,7 +121,9 @@ struct mempool_s
 #if CONFIG_MM_BACKTRACE >= 0
 struct mempool_backtrace_s
 {
-  struct list_node node;
+  unsigned int magic; /* The guard byte, mark is alloc / free, and check
+                       * if there is any out of bounds.
+                       */
   pid_t pid;
   unsigned long seqno; /* The sequence of memory malloc */
 #  if CONFIG_MM_BACKTRACE > 0
@@ -174,7 +175,7 @@ extern "C"
 int mempool_init(FAR struct mempool_s *pool, FAR const char *name);
 
 /****************************************************************************
- * Name: mempool_alloc
+ * Name: mempool_allocate
  *
  * Description:
  *   Allocate an block from a specific memory pool.
@@ -190,10 +191,10 @@ int mempool_init(FAR struct mempool_s *pool, FAR const char *name);
  *
  ****************************************************************************/
 
-FAR void *mempool_alloc(FAR struct mempool_s *pool);
+FAR void *mempool_allocate(FAR struct mempool_s *pool);
 
 /****************************************************************************
- * Name: mempool_free
+ * Name: mempool_release
  *
  * Description:
  *   Release an memory block to the pool.
@@ -203,7 +204,7 @@ FAR void *mempool_alloc(FAR struct mempool_s *pool);
  *   blk  - The pointer of memory block.
  ****************************************************************************/
 
-void mempool_free(FAR struct mempool_s *pool, FAR void *blk);
+void mempool_release(FAR struct mempool_s *pool, FAR void *blk);
 
 /****************************************************************************
  * Name: mempool_info
@@ -339,7 +340,7 @@ struct mempool_multiple_s;
 
 FAR struct mempool_multiple_s *
 mempool_multiple_init(FAR const char *name,
-                      FAR size_t *poolsize, size_t npools,
+                      FAR const size_t *poolsize, size_t npools,
                       mempool_multiple_alloc_t alloc,
                       mempool_multiple_alloc_size_t alloc_size,
                       mempool_multiple_free_t free, FAR void *arg,

@@ -259,7 +259,7 @@ The LINUM-STM32H753BI has a external SDRAM with 16Mbits connected to FMC periphe
   =========== =====
   FMC         PINS
   =========== =====
-  FMC_A0      PF0
+  FMC_A0      PJ12
   FMC_A1      PF1
   FMC_A2      PF2
   FMC_A3      PF3
@@ -755,3 +755,61 @@ This configuration is focused on network testing using the ethernet periferal::
       56 bytes from 142.251.129.110: icmp_seq=9 time=0.0 ms
       10 packets transmitted, 10 received, 0% packet loss, time 10100 ms
       rtt min/avg/max/mdev = 0.000/1.000/10.000/3.000 ms
+
+qencoder
+--------
+
+Configures and enables TIM5 on CH1(PA0) and CH2(PH11) to handle Quadrature Encoder::
+
+    nsh> qe
+    qe_main: Hardware initialized. Opening the encoder device: /dev/qe0
+    qe_main: Number of samples: 0
+    qe_main:   1. 1
+    qe_main:   2. 2
+    qe_main:   3. 3
+    qe_main:   4. 2
+    qe_main:   5. 1
+
+sdram
+--------
+
+This configuration uses the FMC peripheral to connect to external SDRAM with 8 MB and add it to the nuttx heap.
+
+To test the sdram use the command **ramtest**::
+
+    nsh> free
+                    total       used       free    maxused    maxfree  nused  nfree
+          Umem:    9397168       5488    9391680       5880    8388592     28      5
+    nsh> ramtest -w -a 0xc0000000 -s 8388608
+    RAMTest: Marching ones: c0000000 8388608
+    RAMTest: Marching zeroes: c0000000 8388608
+    RAMTest: Pattern test: c0000000 8388608 55555555 aaaaaaaa
+    RAMTest: Pattern test: c0000000 8388608 66666666 99999999
+    RAMTest: Pattern test: c0000000 8388608 33333333 cccccccc
+    RAMTest: Address-in-address test: c0000000 8388608
+
+mfrc522
+--------
+
+Configures the board to use the SPI4 and enables RFID driver with MFRC522::
+
+    nsh> ls /dev/
+    /dev:
+    console
+    null
+    rfid0
+    rtc0
+    ttyS0
+    nsh> rfid_readuid
+    Trying to READ: Card is not present!
+    Trying to READ: Card is not present!
+    Trying to READ: RFID CARD UID = 0x3DB3F169
+
+  ======== =====
+  MFRC522  PINS
+  ======== =====
+  SCK      PE2
+  MISO     PE5
+  MOSI     PE6
+  CS       PE4
+  ======== =====

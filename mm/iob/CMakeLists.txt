@@ -1,6 +1,8 @@
 # ##############################################################################
 # mm/iob/CMakeLists.txt
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more contributor
 # license agreements.  See the NOTICE file distributed with this work for
 # additional information regarding copyright ownership.  The ASF licenses this
@@ -44,7 +46,7 @@ if(CONFIG_MM_IOB)
       iob_navail.c
       iob_free_queue_qentry.c
       iob_tailroom.c
-      iob_get_queue_size.c
+      iob_get_queue_info.c
       iob_reserve.c
       iob_update_pktlen.c
       iob_count.c)

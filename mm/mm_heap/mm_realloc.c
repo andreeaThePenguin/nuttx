@@ -1,6 +1,8 @@
 /****************************************************************************
  * mm/mm_heap/mm_realloc.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -31,9 +33,9 @@
 #include <assert.h>
 
 #include <nuttx/mm/mm.h>
+#include <nuttx/mm/kasan.h>
 
 #include "mm_heap/mm.h"
-#include "kasan/kasan.h"
 
 /****************************************************************************
  * Public Functions
@@ -83,23 +85,27 @@ FAR void *mm_realloc(FAR struct mm_heap_s *heap, FAR void *oldmem,
 
   DEBUGASSERT(mm_heapmember(heap, oldmem));
 
-#if CONFIG_MM_HEAP_MEMPOOL_THRESHOLD != 0
-  newmem = mempool_multiple_realloc(heap->mm_mpool, oldmem, size);
-  if (newmem != NULL)
+#ifdef CONFIG_MM_HEAP_MEMPOOL
+  if (heap->mm_mpool)
     {
-      return newmem;
-    }
-  else if (size <= CONFIG_MM_HEAP_MEMPOOL_THRESHOLD ||
-           mempool_multiple_alloc_size(heap->mm_mpool, oldmem) >= 0)
-    {
-      newmem = mm_malloc(heap, size);
+      newmem = mempool_multiple_realloc(heap->mm_mpool, oldmem, size);
       if (newmem != NULL)
         {
-          memcpy(newmem, oldmem, MIN(size, mm_malloc_size(heap, oldmem)));
-          mm_free(heap, oldmem);
+          return newmem;
         }
+      else if (size <= heap->mm_threshold ||
+               mempool_multiple_alloc_size(heap->mm_mpool, oldmem) >= 0)
+        {
+          newmem = mm_malloc(heap, size);
+          if (newmem != NULL)
+            {
+              memcpy(newmem, oldmem,
+                     MIN(size, mm_malloc_size(heap, oldmem)));
+              mm_free(heap, oldmem);
+            }
 
-      return newmem;
+          return newmem;
+        }
     }
 #endif
 
@@ -143,6 +149,7 @@ FAR void *mm_realloc(FAR struct mm_heap_s *heap, FAR void *oldmem,
 
       if (newsize < oldsize)
         {
+          heap->mm_curused += newsize - oldsize;
           mm_shrinkchunk(heap, oldnode, newsize);
           kasan_poison((FAR char *)oldnode + MM_SIZEOF_NODE(oldnode) +
                        sizeof(mmsize_t), oldsize - MM_SIZEOF_NODE(oldnode));
@@ -259,7 +266,8 @@ FAR void *mm_realloc(FAR struct mm_heap_s *heap, FAR void *oldmem,
 
           if (prevsize < takeprev + MM_MIN_CHUNK)
             {
-              takeprev = prevsize;
+              heap->mm_curused += prevsize - takeprev;
+              takeprev          = prevsize;
             }
 
           /* Extend the node into the previous free chunk */
@@ -332,7 +340,8 @@ FAR void *mm_realloc(FAR struct mm_heap_s *heap, FAR void *oldmem,
 
           if (nextsize < takenext + MM_MIN_CHUNK)
             {
-              takenext = nextsize;
+              heap->mm_curused += nextsize - takenext;
+              takenext          = nextsize;
             }
 
           /* Extend the node into the next chunk */
@@ -376,8 +385,8 @@ FAR void *mm_realloc(FAR struct mm_heap_s *heap, FAR void *oldmem,
       mm_unlock(heap);
       MM_ADD_BACKTRACE(heap, (FAR char *)newmem - MM_SIZEOF_ALLOCNODE);
 
-      kasan_unpoison(newmem, mm_malloc_size(heap, newmem));
-      if (newmem != oldmem)
+      newmem = kasan_unpoison(newmem, mm_malloc_size(heap, newmem));
+      if (kasan_reset_tag(newmem) != kasan_reset_tag(oldmem))
         {
           /* Now we have to move the user contents 'down' in memory.  memcpy
            * should be safe for this.

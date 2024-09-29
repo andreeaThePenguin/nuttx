@@ -24,8 +24,9 @@
 
 #include <nuttx/config.h>
 
+#include <arch/irq.h>
+
 #include "arm.h"
-#include "cp15.h"
 #include "sctlr.h"
 #include "mmu.h"
 #include "chip.h"
@@ -183,7 +184,17 @@ __start:
 	and		r0, r0, #0x3
 	cmp		r0, #0
 	beq		__cpu0_start
+
+#ifdef CONFIG_ARMV7A_SMP_BUSY_WAIT
+	ldr		r2, =CONFIG_ARMV7A_SMP_BUSY_WAIT_FLAG_ADDR
+1:
+	ldr		r1, [r2, #0]
+	cmp		r1, #0
+	beq		1b
+#else
 	wfe
+#endif
+
 	cmp		r0, #1
 	beq		__cpu1_start
 #  if CONFIG_SMP_NCPUS > 2
@@ -357,6 +368,7 @@ __cpu0_start:
 	 */
 
 	mov		r0, #0
+	mcr		CP15_TPIDRPRW(r0)	/* Initialize percpu reg TPIDRPRW */
 #ifdef CONFIG_ARM_HAVE_MPCORE
 	mcr		CP15_TLBIALLIS(r0)	/* Invalidate the entire unified TLB */
 	mcr		CP15_BPIALLIS(r0)	/* Invalidate entire branch prediction array */
@@ -673,6 +685,15 @@ __cpu0_start:
 	 */
 
 	bl		arm_boot
+
+	/* finish busy wait */
+
+#ifdef CONFIG_ARMV7A_SMP_BUSY_WAIT
+	ldr		r0, =CONFIG_ARMV7A_SMP_BUSY_WAIT_FLAG_ADDR
+	mov		r1, #1
+	str		r1, [r0]
+	dsb		sy
+#endif
 
 	/* Finally branch to the OS entry point */
 

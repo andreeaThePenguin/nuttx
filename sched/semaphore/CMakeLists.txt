@@ -1,6 +1,8 @@
 # ##############################################################################
 # sched/semaphore/CMakeLists.txt
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more contributor
 # license agreements.  See the NOTICE file distributed with this work for
 # additional information regarding copyright ownership.  The ASF licenses this
@@ -36,12 +38,8 @@ if(CONFIG_PRIORITY_INHERITANCE)
   list(APPEND CSRCS sem_initialize.c sem_holder.c sem_setprotocol.c)
 endif()
 
-if(CONFIG_SPINLOCK)
-  list(APPEND CSRCS spinlock.c)
-endif()
-
-if(CONFIG_TICKET_SPINLOCK)
-  list(APPEND CSRCS spinlock.c)
+if(CONFIG_PRIORITY_PROTECT)
+  list(APPEND CSRCS sem_protect.c)
 endif()
 
 target_sources(sched PRIVATE ${CSRCS})

@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/group/group_join.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -51,9 +53,6 @@
  * Input Parameters:
  *   tcb - The TCB of the new "child" task that need to join the group.
  *
- * Returned Value:
- *   0 (OK) on success; a negated errno value on failure.
- *
  * Assumptions:
  * - The parent task from which the group will be inherited is the task at
  *   the head of the ready to run list.
@@ -62,7 +61,7 @@
  *
  ****************************************************************************/
 
-int group_bind(FAR struct pthread_tcb_s *tcb)
+void group_bind(FAR struct pthread_tcb_s *tcb)
 {
   FAR struct tcb_s *ptcb = this_task();
 
@@ -71,7 +70,6 @@ int group_bind(FAR struct pthread_tcb_s *tcb)
   /* Copy the group reference from the parent to the child */
 
   tcb->cmn.group = ptcb->group;
-  return OK;
 }
 
 /****************************************************************************
@@ -83,9 +81,6 @@ int group_bind(FAR struct pthread_tcb_s *tcb)
  * Input Parameters:
  *   tcb - The TCB of the new "child" task that need to join the group.
  *
- * Returned Value:
- *   0 (OK) on success; a negated errno value on failure.
- *
  * Assumptions:
  * - The parent task from which the group will be inherited is the task at
  *   the head of the ready to run list.
@@ -94,7 +89,7 @@ int group_bind(FAR struct pthread_tcb_s *tcb)
  *
  ****************************************************************************/
 
-int group_join(FAR struct pthread_tcb_s *tcb)
+void group_join(FAR struct pthread_tcb_s *tcb)
 {
   FAR struct task_group_s *group;
   irqstate_t flags;
@@ -110,8 +105,6 @@ int group_join(FAR struct pthread_tcb_s *tcb)
   flags = spin_lock_irqsave(NULL);
   sq_addfirst(&tcb->cmn.member, &group->tg_members);
   spin_unlock_irqrestore(NULL, flags);
-
-  return OK;
 }
 
 #endif /* !CONFIG_DISABLE_PTHREAD */

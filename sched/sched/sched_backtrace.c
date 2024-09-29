@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/sched/sched_backtrace.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -43,17 +45,21 @@
 #ifdef CONFIG_ARCH_HAVE_BACKTRACE
 int sched_backtrace(pid_t tid, FAR void **buffer, int size, int skip)
 {
-  FAR struct tcb_s *rtcb = NULL;
-
+  FAR struct tcb_s *rtcb;
+  irqstate_t flags;
+  int ret = 0;
   if (tid >= 0)
     {
-      rtcb = nxsched_get_tcb(tid);
-      if (rtcb == NULL)
+      flags = enter_critical_section();
+      rtcb  = nxsched_get_tcb(tid);
+      if (rtcb != NULL)
         {
-          return 0;
+          ret = up_backtrace(rtcb, buffer, size, skip);
         }
+
+      leave_critical_section(flags);
     }
 
-  return up_backtrace(rtcb, buffer, size, skip);
+  return ret;
 }
 #endif

@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/sched/sched_releasetcb.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -57,7 +59,7 @@ static void nxsched_releasepid(pid_t pid)
    * total for all threads.
    */
 
-  g_cpuload_total -= nxsched_pidhash()[hash_ndx]->ticks;
+  g_cpuload_total -= g_pidhash[hash_ndx]->ticks;
 #endif
 
   /* Make any pid associated with this hash available.  Note:
@@ -65,7 +67,7 @@ static void nxsched_releasepid(pid_t pid)
    * following action is atomic
    */
 
-  nxsched_pidhash()[hash_ndx] = NULL;
+  g_pidhash[hash_ndx] = NULL;
 
   leave_critical_section(flags);
 }
@@ -170,9 +172,9 @@ int nxsched_release_tcb(FAR struct tcb_s *tcb, uint8_t ttype)
 
       nxtask_joindestroy(tcb);
 
-      /* Kernel thread and group still reference by pthread */
+      /* Task still referenced by pthread */
 
-      if (ttype != TCB_FLAG_TTYPE_PTHREAD)
+      if (ttype == TCB_FLAG_TTYPE_TASK)
         {
           ttcb = (FAR struct task_tcb_s *)tcb;
           if (!sq_empty(&ttcb->group.tg_members)

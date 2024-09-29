@@ -1,6 +1,8 @@
 # ##############################################################################
 # net/arp/CMakeLists.txt
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more contributor
 # license agreements.  See the NOTICE file distributed with this work for
 # additional information regarding copyright ownership.  The ASF licenses this
@@ -31,6 +33,10 @@ if(CONFIG_NET_ARP)
 
   if(CONFIG_NET_ARP_DUMP)
     list(APPEND SRCS arp_dump.c)
+  endif()
+
+  if(CONFIG_NET_ARP_ACD)
+    list(APPEND SRCS arp_acd.c)
   endif()
 
   target_sources(net PRIVATE ${SRCS})

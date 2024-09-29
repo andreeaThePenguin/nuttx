@@ -1,6 +1,8 @@
 /****************************************************************************
  * binfmt/binfmt_execmodule.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -136,13 +138,13 @@ static void exec_swap(FAR struct tcb_s *ptcb, FAR struct tcb_s *chtcb)
   pndx  = PIDHASH(ptcb->pid);
   chndx = PIDHASH(chtcb->pid);
 
-  DEBUGASSERT(nxsched_pidhash()[pndx]);
-  DEBUGASSERT(nxsched_pidhash()[chndx]);
+  DEBUGASSERT(g_pidhash[pndx]);
+  DEBUGASSERT(g_pidhash[chndx]);
 
-  /* Exchange nxsched_pidhash() index */
+  /* Exchange g_pidhash index */
 
-  nxsched_pidhash()[pndx] = chtcb;
-  nxsched_pidhash()[chndx] = ptcb;
+  g_pidhash[pndx] = chtcb;
+  g_pidhash[chndx] = ptcb;
 
   /* Exchange pid */
 

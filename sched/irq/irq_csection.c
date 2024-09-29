@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/irq/irq_csection.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -36,6 +38,18 @@
 #include "irq/irq.h"
 
 #ifdef CONFIG_IRQCOUNT
+/****************************************************************************
+ * Pre-processor Definitions
+ ****************************************************************************/
+
+#ifdef CONFIG_SMP
+#  define cpu_irqlock_set(cpu) \
+  do \
+    { \
+      g_cpu_irqset |= (1 << cpu); \
+    } \
+  while (0)
+#endif
 
 /****************************************************************************
  * Public Data
@@ -50,7 +64,6 @@ volatile spinlock_t g_cpu_irqlock = SP_UNLOCKED;
 
 /* Used to keep track of which CPU(s) hold the IRQ lock. */
 
-volatile spinlock_t g_cpu_irqsetlock;
 volatile cpu_set_t g_cpu_irqset;
 
 /* Handles nested calls to enter_critical section from interrupt handlers */
@@ -106,7 +119,7 @@ volatile uint8_t g_cpu_nestcount[CONFIG_SMP_NCPUS];
  ****************************************************************************/
 
 #ifdef CONFIG_SMP
-static bool irq_waitlock(int cpu)
+static inline_function bool irq_waitlock(int cpu)
 {
 #ifdef CONFIG_SCHED_INSTRUMENTATION_SPINLOCKS
   FAR struct tcb_s *tcb = current_task(cpu);
@@ -277,17 +290,7 @@ try_again_in_irq:
                   DEBUGVERIFY(up_cpu_paused(cpu));
                   paused = true;
 
-                  /* NOTE: As the result of up_cpu_paused(cpu), this CPU
-                   * might set g_cpu_irqset in nxsched_resume_scheduler()
-                   * However, another CPU might hold g_cpu_irqlock.
-                   * To avoid this situation, releae g_cpu_irqlock first.
-                   */
-
-                  if ((g_cpu_irqset & (1 << cpu)) != 0)
-                    {
-                      spin_clrbit(&g_cpu_irqset, cpu, &g_cpu_irqsetlock,
-                                  &g_cpu_irqlock);
-                    }
+                  DEBUGASSERT((g_cpu_irqset & (1 << cpu)) == 0);
 
                   /* NOTE: Here, this CPU does not hold g_cpu_irqlock,
                    * so call irq_waitlock(cpu) to acquire g_cpu_irqlock.
@@ -295,22 +298,21 @@ try_again_in_irq:
 
                   goto try_again_in_irq;
                 }
+
+                cpu_irqlock_set(cpu);
             }
 
           /* In any event, the nesting count is now one */
 
           g_cpu_nestcount[cpu] = 1;
 
-          /* Also set the CPU bit so that other CPUs will be aware that
-           * this CPU holds the critical section.
-           */
-
-          spin_setbit(&g_cpu_irqset, cpu, &g_cpu_irqsetlock,
-                      &g_cpu_irqlock);
           if (paused)
             {
               up_cpu_paused_restore();
             }
+
+          DEBUGASSERT(spin_is_locked(&g_cpu_irqlock) &&
+                      (g_cpu_irqset & (1 << cpu)) != 0);
         }
     }
   else
@@ -375,14 +377,13 @@ try_again_in_irq:
            * like lockcount:  Both will disable pre-emption.
            */
 
-          spin_setbit(&g_cpu_irqset, cpu, &g_cpu_irqsetlock,
-                      &g_cpu_irqlock);
+          cpu_irqlock_set(cpu);
           rtcb->irqcount = 1;
 
           /* Note that we have entered the critical section */
 
-#ifdef CONFIG_SCHED_CRITMONITOR
-          nxsched_critmon_csection(rtcb, true);
+#if CONFIG_SCHED_CRITMONITOR_MAXTIME_CSECTION >= 0
+          nxsched_critmon_csection(rtcb, true, return_address(0));
 #endif
 #ifdef CONFIG_SCHED_INSTRUMENTATION_CSECTION
           sched_note_csection(rtcb, true);
@@ -421,8 +422,8 @@ irqstate_t enter_critical_section(void)
         {
           /* Note that we have entered the critical section */
 
-#ifdef CONFIG_SCHED_CRITMONITOR
-          nxsched_critmon_csection(rtcb, true);
+#if CONFIG_SCHED_CRITMONITOR_MAXTIME_CSECTION >= 0
+          nxsched_critmon_csection(rtcb, true, return_address(0));
 #endif
 #ifdef CONFIG_SCHED_INSTRUMENTATION_CSECTION
           sched_note_csection(rtcb, true);
@@ -482,11 +483,11 @@ void leave_critical_section(irqstate_t flags)
 
           FAR struct tcb_s *rtcb = current_task(cpu);
           DEBUGASSERT(rtcb != NULL);
+          DEBUGASSERT((g_cpu_irqset & (1 << cpu)) != 0);
 
           if (rtcb->irqcount <= 0)
             {
-              spin_clrbit(&g_cpu_irqset, cpu, &g_cpu_irqsetlock,
-                          &g_cpu_irqlock);
+              cpu_irqlock_clear();
             }
 
           g_cpu_nestcount[cpu] = 0;
@@ -522,8 +523,8 @@ void leave_critical_section(irqstate_t flags)
         {
           /* No.. Note that we have left the critical section */
 
-#ifdef CONFIG_SCHED_CRITMONITOR
-          nxsched_critmon_csection(rtcb, false);
+#if CONFIG_SCHED_CRITMONITOR_MAXTIME_CSECTION >= 0
+          nxsched_critmon_csection(rtcb, false, return_address(0));
 #endif
 #ifdef CONFIG_SCHED_INSTRUMENTATION_CSECTION
           sched_note_csection(rtcb, false);
@@ -541,8 +542,7 @@ void leave_critical_section(irqstate_t flags)
            */
 
           rtcb->irqcount = 0;
-          spin_clrbit(&g_cpu_irqset, cpu, &g_cpu_irqsetlock,
-                      &g_cpu_irqlock);
+          cpu_irqlock_clear();
 
           /* Have all CPUs released the lock? */
         }
@@ -577,8 +577,8 @@ void leave_critical_section(irqstate_t flags)
         {
           /* Note that we have left the critical section */
 
-#ifdef CONFIG_SCHED_CRITMONITOR
-          nxsched_critmon_csection(rtcb, false);
+#if CONFIG_SCHED_CRITMONITOR_MAXTIME_CSECTION >= 0
+          nxsched_critmon_csection(rtcb, false, return_address(0));
 #endif
 #ifdef CONFIG_SCHED_INSTRUMENTATION_CSECTION
           sched_note_csection(rtcb, false);
@@ -591,63 +591,4 @@ void leave_critical_section(irqstate_t flags)
   up_irq_restore(flags);
 }
 #endif
-
-/****************************************************************************
- * Name: restore_critical_section
- *
- * Description:
- *   Restore the critical_section
- *
- * Input Parameters:
- *   None
- *
- * Returned Value:
- *   None
- *
- ****************************************************************************/
-
-#ifdef CONFIG_SMP
-void restore_critical_section(void)
-{
-  /* NOTE: The following logic for adjusting global IRQ controls were
-   * derived from nxsched_add_readytorun() and sched_removedreadytorun()
-   * Here, we only handles clearing logic to defer unlocking IRQ lock
-   * followed by context switching.
-   */
-
-  FAR struct tcb_s *tcb = this_task();
-  int me = this_cpu();
-
-  /* Adjust global IRQ controls.  If irqcount is greater than zero,
-   * then this task/this CPU holds the IRQ lock
-   */
-
-  if (tcb->irqcount > 0)
-    {
-      /* Do notihing here
-       * NOTE: spin_setbit() is done in nxsched_add_readytorun()
-       * and nxsched_remove_readytorun()
-       */
-    }
-
-  /* No.. This CPU will be relinquishing the lock.  But this works
-   * differently if we are performing a context switch from an
-   * interrupt handler and the interrupt handler has established
-   * a critical section.  We can detect this case when
-   * g_cpu_nestcount[me] > 0.
-   */
-
-  else if (g_cpu_nestcount[me] <= 0)
-    {
-      /* Release our hold on the IRQ lock. */
-
-      if ((g_cpu_irqset & (1 << me)) != 0)
-        {
-          spin_clrbit(&g_cpu_irqset, me, &g_cpu_irqsetlock,
-                      &g_cpu_irqlock);
-        }
-    }
-}
-#endif /* CONFIG_SMP */
-
 #endif /* CONFIG_IRQCOUNT */

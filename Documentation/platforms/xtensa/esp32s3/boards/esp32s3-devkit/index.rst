@@ -146,6 +146,22 @@ the ``buttons`` application and pressing on any of the available board buttons::
     nsh> Sample = 1
     Sample = 0
 
+capture
+--------
+
+The capture configuration enables the capture driver and the capture example, allowing
+the user to measure duty cycle and frequency of a signal. Default pin is GPIO 12 with
+an internal pull-up resistor enabled. When connecting a 50 Hz pulse with 50% duty cycle,
+the following output is expected::
+
+    nsh> cap
+    cap_main: Hardware initialized. Opening the capture device: /dev/capture0
+    cap_main: Number of samples: 0
+    pwm duty cycle: 50 % 
+    pwm frequence: 50 Hz 
+    pwm duty cycle: 50 % 
+    pwm frequence: 50 Hz 
+
 coremark
 --------
 
@@ -158,7 +174,6 @@ disables the NuttShell to get the best possible score.
 
 cxx
 ---
-
 Development environment ready for C++ applications. You can check if the setup
 was successful by running ``cxxtest``::
 
@@ -180,6 +195,12 @@ was successful by running ``cxxtest``::
     File /proc/meminfo exists!
     Invalid file! /invalid
     File /proc/version exists!
+
+elf
+---
+
+This configuration uses apps/examples/elf in order to test the ELF loader.
+It can be tested by executing the ``elf`` application.
 
 gpio
 ----
@@ -240,6 +261,18 @@ Flash and PSRAM).
 
 .. warning:: The World Controller and Permission Control **do not** prevent
   the application from accessing CPU System Registers.
+
+motor
+-------
+
+The motor configuration enables the MCPWM peripheral with support to brushed DC motor
+control.
+
+It creates a ``/dev/motor0`` device with speed and direction control capabilities
+by using two GPIOs (GPIO15 and GPIO16) for PWM output. PWM frequency is configurable
+from 25 Hz to 3 kHz, however it defaults to 1 kHz.
+There is also support for an optional fault GPIO (defaults to GPIO10), which can be used
+for quick motor braking. All GPIOs are configurable in ``menuconfig``.
 
 mcuboot_nsh
 -----------
@@ -420,6 +453,13 @@ To test it, just execute the ``pwm`` application::
     pwm_main: starting output with frequency: 10000 duty: 00008000
     pwm_main: stopping output
 
+qemu_debug
+----------
+
+A configuration tailored for the `Espressif fork of QEMU`_.
+
+.. _Espressif fork of QEMU: https://github.com/espressif/qemu
+
 random
 ------
 
@@ -479,6 +519,54 @@ You can set an alarm, check its progress and receive a notification after it exp
     Opening /dev/rtc0
     Alarm 0 is active with 10 seconds to expiration
     nsh> alarm_daemon: alarm 0 received
+
+sdmmc
+-----
+
+Based on nsh. Support for sdmmc driver is enabled with following settings:
+
+Enable sdmmc driver::
+
+    CONFIG_ESP32S3_SDMMC=y
+
+Default GPIO definitions::
+
+    CONFIG_ESP32S3_SDMMC_CMD=41
+    CONFIG_ESP32S3_SDMMC_CLK=39
+    CONFIG_ESP32S3_SDMMC_D0=40
+    CONFIG_ESP32S3_SDMMC_D1=16
+    CONFIG_ESP32S3_SDMMC_D2=8
+    CONFIG_ESP32S3_SDMMC_D3=42
+
+Multiblock limitation due to hardware::
+
+    CONFIG_MMCSD_MULTIBLOCK_LIMIT=128
+
+Use sched_yield instead of usleep due to long tick time::
+
+    CONFIG_MMCSD_CHECK_READY_STATUS_WITHOUT_SLEEP=y
+
+This configuration has been verified with an adapter (1.27 to 2.54mm T-type
+adapter, CN10P2) and an `external emmc module <https://semiconductor.samsung.com/jp/estorage/emmc/emmc-5-1/klm8g1getf-b041/>`_.
+
+Besides the connections to 3v3 and GND of ESP32S3 DevKit, pins of the adapter
+used in the verification are connected to ESP32S3 DevKit as following::
+
+    adapter pin           ESP32S3 GPIO
+        11      ===CMD==>       41
+        12      ===CLK==>       39
+        1       ===D0===>       40
+        2       ===D1===>       16
+        3       ===D2===>       8
+        4       ===D3===>       42
+
+Format and mount the SD/MMC device with following commands::
+
+    mkfatfs -F 32 -r /mnt /dev/mmcsd1
+    mount -t vfat /dev/mmcsd1 /mnt
+
+FAT filesystem is enabled in the default configuration. Other filesystems may
+also work.
 
 smp
 ---

@@ -50,6 +50,10 @@
 #  include "esp32s2_tim_lowerhalf.h"
 #endif
 
+#ifdef CONFIG_ESPRESSIF_WIFI
+#  include "esp32s2_board_wlan.h"
+#endif
+
 #ifdef CONFIG_ESP32S2_I2C
 #  include "esp32s2_i2c.h"
 #endif
@@ -90,6 +94,10 @@
 
 #ifdef CONFIG_ESP_RMT
 #  include "esp32s2_board_rmt.h"
+#endif
+
+#ifdef CONFIG_ESPRESSIF_TEMP
+#  include "espressif/esp_temperature_sensor.h"
 #endif
 
 #include "esp32s2-saola-1.h"
@@ -163,7 +171,7 @@ int esp32s2_bringup(void)
     }
 #endif /* CONFIG_ESP32S2_LEDC */
 
-#ifdef CONFIG_ESP32S2_SPIFLASH
+#ifdef CONFIG_ESPRESSIF_SPIFLASH
   ret = board_spiflash_init();
   if (ret)
     {
@@ -298,6 +306,19 @@ int esp32s2_bringup(void)
     }
 #endif
 
+#ifdef CONFIG_ESPRESSIF_WIRELESS
+
+#ifdef CONFIG_ESPRESSIF_WIFI
+  ret = board_wlan_init();
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: Failed to initialize wireless subsystem=%d\n",
+             ret);
+    }
+#endif
+
+#endif
+
 #ifdef CONFIG_SENSORS_BMP180
   /* Try to register BMP180 device in I2C0 */
 
@@ -377,6 +398,16 @@ int esp32s2_bringup(void)
   if (ret < 0)
     {
       syslog(LOG_ERR, "ERROR: board_rmt_txinitialize() failed: %d\n", ret);
+    }
+#endif
+
+#ifdef CONFIG_ESPRESSIF_TEMP
+  struct esp_temp_sensor_config_t cfg = TEMPERATURE_SENSOR_CONFIG(10, 50);
+  ret = esp_temperature_sensor_initialize(cfg);
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "Failed to initialize temperature sensor driver: %d\n",
+             ret);
     }
 #endif
 

@@ -88,6 +88,33 @@ All of the configurations presented below can be tested by running the following
 Where <config_name> is the name of board configuration you want to use, i.e.: nsh, buttons, wifi...
 Then use a serial console terminal like ``picocom`` configured to 115200 8N1.
 
+bmp180
+------
+
+This configuration enables the use of the BMP180 pressure sensor over I2C.
+You can check that the sensor is working by using the ``bmp180`` application::
+
+    nsh> bmp180
+    Pressure value = 91531
+    Pressure value = 91526
+    Pressure value = 91525
+
+capture
+--------
+
+The capture configuration enables the capture driver and the capture example, allowing
+the user to measure duty cycle and frequency of a signal. Default pin is GPIO 18 with
+an internal pull-up resistor enabled. When connecting a 50 Hz pulse with 50% duty cycle,
+the following output is expected::
+
+    nsh> cap
+    cap_main: Hardware initialized. Opening the capture device: /dev/capture0
+    cap_main: Number of samples: 0
+    pwm duty cycle: 50 % 
+    pwm frequence: 50 Hz 
+    pwm duty cycle: 50 % 
+    pwm frequence: 50 Hz 
+
 coremark
 --------
 
@@ -119,6 +146,33 @@ We can use the interrupt pin to send a signal when the interrupt fires::
 The pin is configured as a rising edge interrupt, so after issuing the
 above command, connect it to 3.3V.
 
+i2c
+---
+
+This configuration can be used to scan and manipulate I2C devices.
+You can scan for all I2C devices using the following command::
+
+    nsh> i2c dev 0x00 0x7f
+
+motor
+-------
+
+The motor configuration enables the MCPWM peripheral with support to brushed DC motor
+control.
+
+It creates a ``/dev/motor0`` device with speed and direction control capabilities
+by using two GPIOs (GPIO21 and GPIO22) for PWM output. PWM frequency is configurable
+from 25 Hz to 3 kHz, however it defaults to 1 kHz.
+There is also support for an optional fault GPIO (defaults to GPIO9), which can be used
+for quick motor braking. All GPIOs are configurable in ``menuconfig``.
+
+mcuboot_nsh
+--------------------
+
+This configuration is the same as the ``nsh`` configuration, but it generates the application
+image in a format that can be used by MCUboot. It also makes the ``make bootloader`` command to
+build the MCUboot bootloader image using the Espressif HAL.
+
 nsh
 ---
 
@@ -139,6 +193,16 @@ To test it, just execute the ``pwm`` application::
     nsh> pwm
     pwm_main: starting output with frequency: 10000 duty: 00008000
     pwm_main: stopping output
+
+qencoder
+---
+
+This configuration demostrates the use of Quadrature Encoder connected to pins
+GPIO10 and GPIO11. You can start measurement of pulses using the following
+command (by default, it will open ``\dev\qe0`` device and print 20 samples
+using 1 second delay)::
+
+    nsh> qe
 
 rmt
 ---
@@ -184,6 +248,17 @@ You can set an alarm, check its progress and receive a notification after it exp
     Opening /dev/rtc0
     Alarm 0 is active with 10 seconds to expiration
     nsh> alarm_daemon: alarm 0 received
+
+spi
+--------
+
+This configuration enables the support for the SPI driver.
+You can test it by connecting MOSI and MISO pins which are GPIO7 and GPIO2
+by default to each other and running the ``spi`` example::
+
+    nsh> spi exch -b 2 "AB"
+    Sending:	AB
+    Received:	AB
 
 spiflash
 --------

@@ -1,5 +1,5 @@
 /****************************************************************************
- * boards/xtensa/esp32s3/common/scripts/mcuboot_sections.ld
+ * boards/xtensa/esp32s3/common/scripts/simple_boot_sections.ld
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -77,7 +77,9 @@ SECTIONS
 
     *(.iram1 .iram1.*)
     esp32s3_start.*(.literal .text .literal.* .text.*)
+    esp32s3_region.*(.text .text.* .literal .literal.*)
 
+    *libarch.a:*esp_loader.*(.literal .text .literal.* .text.*)
     *libarch.a:esp32s3_cpuindex.*(.literal .text .literal.* .text.*)
     *libarch.a:esp32s3_irq.*(.literal .text .literal.* .text.*)
     *libarch.a:esp32s3_user.*(.literal .text .literal.* .text.*)
@@ -89,9 +91,7 @@ SECTIONS
     *libarch.a:xtensa_modifyreg32.*(.literal .text .literal.* .text.*)
     *libarch.a:xtensa_testset.*(.literal .text .literal.* .text.*)
 
-#ifdef CONFIG_ESP32S3_BLE
     *libc.a:sq_remlast.*(.literal .text .literal.* .text.*)
-#endif
 
     *libdrivers.a:syslog_flush.*(.literal .text .literal.* .text.*)
 
@@ -104,6 +104,7 @@ SECTIONS
     *libsched.a:sched_thistask.*(.literal .text .literal.* .text.*)
     *libsched.a:spinlock.*(.literal .text .literal.* .text.*)
     *libsched.a:*sched_get_stackinfo.*(.literal .text .literal.* .text.*)
+    *libsched.a:stack_record.*(.literal .text .literal.* .text.*)
 
 #ifdef CONFIG_ESP32S3_SPEED_UP_ISR
     *libarch.a:xtensa_switchcontext.*(.literal.up_switch_context .text.up_switch_context)
@@ -197,6 +198,7 @@ SECTIONS
     *libarch.a:*log_noos.*(.text .text.* .literal .literal.*)
     *libarch.a:*cpu_region_protect.*(.text .text.* .literal .literal.*)
     *libarch.a:*mspi_timing_tuning.*(.text .text.* .literal .literal.*)
+    *libarch.a:*esp_rom_cache_esp32s2_esp32s3.*(.literal .text .literal.* .text.*)
 
     *libc.a:*lib_instrument.*(.text .text.* .literal .literal.*)
 
@@ -284,6 +286,7 @@ SECTIONS
     KEEP (*(.jcr))
     *(.dram1 .dram1.*)
     esp32s3_start.*(.rodata .rodata.*)
+    esp32s3_region.*(.rodata .rodata.*)
 
     *libphy.a:(.rodata  .rodata.*)
     *libarch.a:xtensa_context.*(.rodata  .rodata.*)
@@ -294,6 +297,7 @@ SECTIONS
 #endif
 
     *libsched.a:*sched_get_stackinfo.*(.rodata .rodata.*)
+    *libarch.a:*esp_loader.*(.rodata .rodata.*)
     *libarch.a:esp32s3_spiflash.*(.rodata .rodata.*)
     *libarch.a:*brownout.*(.rodata .rodata.*)
     *libarch.a:*cpu.*(.rodata .rodata.*)
@@ -480,6 +484,13 @@ SECTIONS
     *(.fini.literal)
     *(.fini)
     *(.gnu.version)
+
+    *(EXCLUDE_FILE(*libnet80211.a *libpp.a) .wifi0iram EXCLUDE_FILE(*libnet80211.a *libpp.a) .wifi0iram.*)
+    *(.wifiextrairam .wifiextrairam.*)
+    *(EXCLUDE_FILE(*libpp.a) .wifiorslpiram EXCLUDE_FILE(*libpp.a) .wifiorslpiram.*)
+    *(EXCLUDE_FILE(*libnet80211.a *libpp.a) .wifirxiram EXCLUDE_FILE(*libnet80211.a *libpp.a) .wifirxiram.*)
+    *(.wifislpiram .wifislpiram.*)
+    *(EXCLUDE_FILE(*libnet80211.a *libpp.a) .wifislprxiram EXCLUDE_FILE(*libnet80211.a *libpp.a) .wifislprxiram.*)
 
     /* CPU will try to prefetch up to 16 bytes of instructions.
      * This means that any configuration (e.g. MMU, PMS) must allow

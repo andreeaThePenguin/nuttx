@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/pkt/pkt_sockif.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -168,7 +170,7 @@ static int pkt_setup(FAR struct socket *psock)
 
 static sockcaps_t pkt_sockcaps(FAR struct socket *psock)
 {
-  return 0;
+  return SOCKCAP_NONBLOCKING;
 }
 
 /****************************************************************************

@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/icmpv6/icmpv6_sendmsg.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -98,6 +100,10 @@ static void sendto_request(FAR struct net_driver_s *dev,
 {
   FAR struct icmpv6_echo_request_s *icmpv6;
 
+#ifdef CONFIG_NET_JUMBO_FRAME
+  netdev_iob_prepare_dynamic(dev, pstate->snd_buflen + IPv6_HDRLEN);
+#endif
+
   /* Set-up to send that amount of data. */
 
   devif_send(dev, pstate->snd_buf, pstate->snd_buflen, IPv6_HDRLEN);
@@ -125,11 +131,14 @@ static void sendto_request(FAR struct net_driver_s *dev,
   /* Calculate the ICMPv6 checksum over the ICMPv6 header and payload. */
 
   icmpv6->chksum = 0;
+
+#ifdef CONFIG_NET_ICMPv6_CHECKSUMS
   icmpv6->chksum = ~icmpv6_chksum(dev, IPv6_HDRLEN);
   if (icmpv6->chksum == 0)
     {
       icmpv6->chksum = 0xffff;
     }
+#endif
 
   ninfo("Outgoing ICMPv6 packet length: %d\n", dev->d_len);
 

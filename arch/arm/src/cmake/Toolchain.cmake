@@ -61,6 +61,8 @@ if(CONFIG_ARCH_TOOLCHAIN_CLANG)
   # https://github.com/apache/incubator-nuttx/pull/5971
 
   add_compile_options(-fno-builtin)
+  add_compile_options(-Wno-atomic-alignment)
+  add_compile_options(-Wno-atomic-alignment)
 else()
   set(TOOLCHAIN_PREFIX arm-none-eabi)
   set(CMAKE_LIBRARY_ARCHITECTURE ${TOOLCHAIN_PREFIX})
@@ -90,10 +92,19 @@ else()
 endif()
 
 # override the ARCHIVE command
+set(CMAKE_ARCHIVE_COMMAND "<CMAKE_AR> rcs <TARGET> <LINK_FLAGS> <OBJECTS>")
+set(CMAKE_RANLIB_COMMAND "<CMAKE_RANLIB> <TARGET>")
+set(CMAKE_C_ARCHIVE_CREATE ${CMAKE_ARCHIVE_COMMAND})
+set(CMAKE_CXX_ARCHIVE_CREATE ${CMAKE_ARCHIVE_COMMAND})
+set(CMAKE_ASM_ARCHIVE_CREATE ${CMAKE_ARCHIVE_COMMAND})
 
-set(CMAKE_C_ARCHIVE_CREATE "<CMAKE_AR> rcs <TARGET> <LINK_FLAGS> <OBJECTS>")
-set(CMAKE_CXX_ARCHIVE_CREATE "<CMAKE_AR> rcs <TARGET> <LINK_FLAGS> <OBJECTS>")
-set(CMAKE_ASM_ARCHIVE_CREATE "<CMAKE_AR> rcs <TARGET> <LINK_FLAGS> <OBJECTS>")
+set(CMAKE_C_ARCHIVE_APPEND ${CMAKE_ARCHIVE_COMMAND})
+set(CMAKE_CXX_ARCHIVE_APPEND ${CMAKE_ARCHIVE_COMMAND})
+set(CMAKE_ASM_ARCHIVE_APPEND ${CMAKE_ARCHIVE_COMMAND})
+
+set(CMAKE_C_ARCHIVE_FINISH ${CMAKE_RANLIB_COMMAND})
+set(CMAKE_CXX_ARCHIVE_FINISH ${CMAKE_RANLIB_COMMAND})
+set(CMAKE_ASM_ARCHIVE_FINISH ${CMAKE_RANLIB_COMMAND})
 
 # Architecture flags
 
@@ -157,6 +168,12 @@ if(CONFIG_DEBUG_OPT_UNUSED_SECTIONS)
   add_compile_options(-ffunction-sections -fdata-sections)
 endif()
 
+# Debug --whole-archive
+
+if(CONFIG_DEBUG_LINK_WHOLE_ARCHIVE)
+  add_link_options(-Wl,--whole-archive)
+endif()
+
 if(CONFIG_ENDIAN_BIG)
   add_compile_options(-mbig-endian)
 endif()
@@ -180,37 +197,30 @@ if(CONFIG_DEBUG_LINK_MAP)
 endif()
 
 if(CONFIG_DEBUG_SYMBOLS)
-  add_compile_options(-g)
+  add_compile_options(${CONFIG_DEBUG_SYMBOLS_LEVEL})
+  if(CONFIG_ARM_TOOLCHAIN_ARMCLANG)
+    add_link_options(-Wl,--debug)
+  endif()
 endif()
 
-set(ARCHCFLAGS "-Wstrict-prototypes")
+add_compile_options(-Wno-attributes -Wno-unknown-pragmas
+                    $<$<COMPILE_LANGUAGE:C>:-Wstrict-prototypes>)
+
+if(CONFIG_CXX_STANDARD)
+  add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-std=${CONFIG_CXX_STANDARD}>)
+endif()
 
 if(NOT CONFIG_LIBCXXTOOLCHAIN)
-  set(ARCHCXXFLAGS "${ARCHCXXFLAGS} -nostdinc++")
+  add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-nostdinc++>)
 endif()
 
 if(NOT CONFIG_CXX_EXCEPTION)
-  string(APPEND ARCHCXXFLAGS " -fno-exceptions -fcheck-new")
+  add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-fno-exceptions>
+                      $<$<COMPILE_LANGUAGE:CXX>:-fcheck-new>)
 endif()
 
 if(NOT CONFIG_CXX_RTTI)
-  string(APPEND ARCHCXXFLAGS " -fno-rtti")
-endif()
-
-if(NOT "${CMAKE_C_FLAGS}" STREQUAL "")
-  string(REGEX MATCH "${ARCHCFLAGS}" EXISTS_FLAGS "${CMAKE_C_FLAGS}")
-endif()
-
-if(NOT EXISTS_FLAGS)
-  set(CMAKE_ASM_FLAGS
-      "${CMAKE_ASM_FLAGS} ${ARCHCFLAGS}"
-      CACHE STRING "" FORCE)
-  set(CMAKE_C_FLAGS
-      "${CMAKE_C_FLAGS} ${ARCHCFLAGS}"
-      CACHE STRING "" FORCE)
-  set(CMAKE_CXX_FLAGS
-      "${CMAKE_CXX_FLAGS} ${ARCHCXXFLAGS}"
-      CACHE STRING "" FORCE)
+  add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>)
 endif()
 
 if(CONFIG_ARCH_TOOLCHAIN_CLANG)

@@ -96,11 +96,6 @@
 
 #define INTSTACK_SIZE (CONFIG_ARCH_INTERRUPTSTACK & ~STACK_ALIGN_MASK)
 
-/* Macros to handle saving and restoring interrupt state. */
-
-#define arm_savestate(regs)    (regs = (uint32_t *)CURRENT_REGS)
-#define arm_restorestate(regs) (CURRENT_REGS = regs)
-
 /* Toolchain dependent, linker defined section addresses */
 
 #if defined(__ICCARM__)
@@ -156,14 +151,6 @@
     sys_call1(SYS_restore_context, (uintptr_t)restoreregs);
 #else
 extern void arm_fullcontextrestore(uint32_t *restoreregs);
-#endif
-
-#ifndef arm_switchcontext
-#  define arm_switchcontext(saveregs, restoreregs) \
-    sys_call2(SYS_switch_context, (uintptr_t)saveregs, (uintptr_t)restoreregs);
-#else
-extern void arm_switchcontext(uint32_t **saveregs,
-                              uint32_t *restoreregs);
 #endif
 
 /* Redefine the linker symbols as armlink style */

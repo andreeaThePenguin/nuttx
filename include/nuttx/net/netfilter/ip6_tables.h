@@ -65,11 +65,49 @@
 #define IP6T_INV_PROTO                  XT_INV_PROTO
 #define IP6T_INV_MASK                   0x7F    /* All possible flag bits mask. */
 
+/* Values for "inv" field for struct ip6t_icmp. */
+
+#define IP6T_ICMP_INV                   0x01    /* Invert the sense of type/code test */
+
+/* Standard return verdict, or do jump. */
+
 #define IP6T_STANDARD_TARGET            XT_STANDARD_TARGET
+
+/* Error verdict. */
+
 #define IP6T_ERROR_TARGET               XT_ERROR_TARGET
 
 #define ip6t_entry_target               xt_entry_target
 #define ip6t_entry_match                xt_entry_match
+
+/* Foreach macro for entries. */
+
+#define ip6t_entry_for_every(entry, head, size) \
+  for ((entry) = (FAR struct ip6t_entry *)(head); \
+       (entry) < (FAR struct ip6t_entry *)((FAR uint8_t *)(head) + (size)); \
+       (entry) = (FAR struct ip6t_entry *) \
+                     ((FAR uint8_t *)(entry) + (entry)->next_offset))
+
+/* Get pointer to match from an entry pointer. */
+
+#define IP6T_MATCH(e) \
+  ((FAR struct xt_entry_match *)((FAR struct ip6t_entry *)(e) + 1))
+#define IP6T_TARGET(e) \
+  ((FAR struct xt_entry_target *)((FAR uint8_t *)(e) + (e)->target_offset))
+
+/* Auto fill common fields of entry and target. */
+
+#define IP6T_FILL_ENTRY(e, target_name) \
+  do \
+    { \
+      (e)->entry.target_offset = offsetof(typeof(*(e)), target); \
+      (e)->entry.next_offset = sizeof(*(e)); \
+      (e)->target.target.u.target_size = sizeof(*(e)) - \
+                                         (e)->entry.target_offset; \
+      strlcpy((e)->target.target.u.user.name, (target_name), \
+              sizeof((e)->target.target.u.user.name)); \
+    } \
+  while(0)
 
 /****************************************************************************
  * Public Types
@@ -240,6 +278,15 @@ struct ip6t_replace
   struct ip6t_entry entries[1];
 };
 
+/* ICMPv6 matching stuff */
+
+struct ip6t_icmp
+{
+  uint8_t type;     /* type to match */
+  uint8_t code[2];  /* range of code */
+  uint8_t invflags; /* Inverse flags */
+};
+
 /****************************************************************************
  * Inline functions
  ****************************************************************************/
@@ -249,7 +296,7 @@ struct ip6t_replace
 static inline FAR struct xt_entry_target *
 ip6t_get_target(FAR struct ip6t_entry *e)
 {
-  return (FAR void *)e + e->target_offset;
+  return (FAR struct xt_entry_target *)((FAR char *)e + e->target_offset);
 }
 
 #endif /* __INCLUDE_NUTTX_NET_NETFILTER_IP6_TABLES_H */

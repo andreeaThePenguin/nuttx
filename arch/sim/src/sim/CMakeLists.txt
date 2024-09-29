@@ -57,7 +57,7 @@ list(
   sim_registerdump.c
   sim_saveusercontext.c
   sim_tcbinfo.c
-  sim_textheap.c
+  sim_sectionheap.c
   sim_checkhostfstypes.c)
 
 if(CONFIG_HOST_X86_64)
@@ -117,16 +117,19 @@ if(CONFIG_LIBM_TOOLCHAIN)
   list(APPEND STDLIBS m)
 endif()
 
+if(CONFIG_RPMSG_VIRTIO)
+  list(APPEND SRCS sim_rpmsg_vritio.c)
+endif()
+
 if(CONFIG_RPTUN)
   list(APPEND SRCS sim_rptun.c)
 endif()
 
 if(CONFIG_SIM_SOUND_ALSA)
   list(APPEND SRCS posix/sim_alsa.c)
-  list(APPEND SRCS posix/sim_offload.c)
+  list(APPEND SRCS sim_offload.c)
   list(APPEND STDLIBS asound)
   list(APPEND STDLIBS mad)
-  list(APPEND STDLIBS mp3lame)
 endif()
 
 # host sources ###############################################################
@@ -156,15 +159,13 @@ if(CONFIG_SIM_CAMERA_V4L2)
 endif()
 
 if(CONFIG_SIM_VIDEO_DECODER)
-  list(APPEND HOSTSRCS sim_hostdecoder.c)
   list(APPEND SRCS sim_decoder.c)
-  list(APPEND STDLIBS openh264)
+  list(APPEND SRCS sim_openh264dec.c)
 endif()
 
 if(CONFIG_SIM_VIDEO_ENCODER)
-  list(APPEND HOSTSRCS sim_hostencoder.c)
   list(APPEND SRCS sim_encoder.c)
-  list(APPEND STDLIBS x264)
+  list(APPEND SRCS sim_x264encoder.c)
 endif()
 
 if(CONFIG_SPINLOCK)

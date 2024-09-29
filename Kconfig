@@ -273,14 +273,18 @@ config BASE_DEFCONFIG
 		current configuration. It is useful for getting the current configuration
 		on runtime.
 
-config BUILD_LOADABLE
+config MODULES
 	bool
 	option modules
 	---help---
 		Automatically selected if KERNEL build is selected.
-		This selection only effects the behavior of the 'make export'
-		target and currently has no effect unless you wish to build
-		loadable applications in a FLAT build.
+		This selection marks the implementation of Kconfig
+		to enable the module build function, and is used to
+		enable 'm' in the triate state. Its semantics are
+		consistent with Kernel. This selection also effects
+		the behavior of the 'make export' target and currently
+		has no effect unless you wish to build loadable applications
+		in a FLAT build.
 
 choice
 	prompt "Memory organization"
@@ -312,8 +316,8 @@ config BUILD_PROTECTED
 config BUILD_KERNEL
 	bool "NuttX kernel build"
 	depends on ARCH_USE_MMU && ARCH_ADDRENV
-	select BUILD_LOADABLE
 	select LIB_SYSCALL
+	select MODULES
 	---help---
 		Builds NuttX as a separately compiled kernel.  No applications are
 		built.  All user applications must reside in a file system where
@@ -410,6 +414,12 @@ config RAW_BINARY
 		different loaders using the GNU objcopy program.  This option
 		should not be selected if you are not using the GNU toolchain.
 
+config RAW_DISASSEMBLY
+	bool "Create a disassembly file"
+	default n
+	---help---
+		Create the nuttx.asm in the disassembly format using the objdump program.
+
 menuconfig UBOOT_UIMAGE
 	bool "U-Boot uImage"
 	select RAW_BINARY
@@ -447,6 +457,22 @@ config DFU_PID
 	hex "PID to use for DFU image"
 
 endif # DFU_BINARY
+
+config OUTPUT_STRIP_PATHS
+	bool "Strip absolute paths from binaries"
+	default y
+	depends on ARCH_TOOLCHAIN_GNU
+	---help---
+		Cmake build provide absolute paths to compile files. If __FILE__
+		macros are used in the source code(ASSERT), the binary will contain
+		many invalid paths.
+		This saves some memory, stops exposing build systems locations in binaries,
+		make failure logs more deterministic and most importantly makes builds more
+		failure logs more deterministic and most importantly makes builds more
+		deterministic.
+		Debuggers usually have a path mapping feature to ensure the files are
+		still found.
+
 endmenu # Binary Output Formats
 
 menu "Customize Header Files"
@@ -1577,6 +1603,37 @@ config DEBUG_I2S_INFO
 
 endif # DEBUG_I2S
 
+config DEBUG_I3C
+	bool "I3C Debug Features"
+	default n
+	depends on I3C
+	---help---
+		Enable I3C debug features.
+
+		Support for this debug option is architecture-specific and may not
+		be available for some MCUs.
+
+if DEBUG_I3C
+
+config DEBUG_I3C_ERROR
+	bool "I3C Error Output"
+	default n
+	depends on DEBUG_ERROR
+	---help---
+		Enable I3C driver error output to SYSLOG.
+
+		Support for this debug option is architecture-specific and may not
+		be available for some MCUs.
+
+config DEBUG_I3C_INFO
+	bool "I3C Informational Output"
+	default n
+	depends on DEBUG_INFO
+	---help---
+		Enable I3C driver informational output to SYSLOG.
+
+endif # DEBUG_I3C
+
 config DEBUG_PWM
 	bool "PWM Debug Features"
 	default n
@@ -1909,6 +1966,37 @@ config DEBUG_SPI_INFO
 		Enable SPI informational output to SYSLOG.
 
 endif # DEBUG_SPI
+
+config DEBUG_THERMAL
+	bool "Thermal Debug Features"
+	default n
+	---help---
+		Enable thermal debug features.
+
+if DEBUG_THERMAL
+
+config DEBUG_THERMAL_ERROR
+	bool "Thermal Error Output"
+	default n
+	depends on DEBUG_ERROR
+	---help---
+		Enable thermal error output to SYSLOG.
+
+config DEBUG_THERMAL_WARN
+	bool "Thermal Warnings Output"
+	default n
+	depends on DEBUG_WARN
+	---help---
+		Enable thermal warning output to SYSLOG.
+
+config DEBUG_THERMAL_INFO
+	bool "Thermal Informational Output"
+	default n
+	depends on DEBUG_INFO
+	---help---
+		Enable thermal informational output to SYSLOG.
+
+endif # DEBUG_THERMAL
 
 config DEBUG_TIMER
 	bool "Timer Debug Features"
@@ -2262,6 +2350,39 @@ config DEBUG_RPMSG_INFO
 		Enable RPMSG driver informational output to SYSLOG.
 
 endif # DEBUG_RPMSG
+
+config DEBUG_CORESIGHT
+	bool "Coresight Debug Features"
+	default n
+	depends on CORESIGHT
+	---help---
+		Enable coresight debug features.
+
+if DEBUG_CORESIGHT
+
+config DEBUG_CORESIGHT_ERROR
+	bool "Coresight Error Output"
+	default n
+	depends on DEBUG_ERROR
+	---help---
+		Enable coresight driver error output to SYSLOG.
+
+config DEBUG_CORESIGHT_WARN
+	bool "Coresight Warnings Output"
+	default n
+	depends on DEBUG_WARN
+	---help---
+		Enable coresight warning output to SYSLOG.
+
+config DEBUG_CORESIGHT_INFO
+	bool "Coresight Informational Output"
+	default n
+	depends on DEBUG_INFO
+	---help---
+		Enable coresight driver informational output to SYSLOG.
+
+endif # DEBUG_CORESIGHT
+
 endif # DEBUG_FEATURES
 
 config ARCH_HAVE_STACKCHECK
@@ -2325,6 +2446,13 @@ config DEBUG_SYMBOLS
 	---help---
 		Build with debug symbols (needed for use with a debugger).
 
+config DEBUG_SYMBOLS_LEVEL
+	string "Custom symbols level"
+	default "-g"
+	---help---
+		This string represents the custom symbol level that will be
+		used if DEBUG_SYMBOLS.
+
 config FRAME_POINTER
 	bool "Compile the NuttX with frame pointers"
 	default n
@@ -2367,6 +2495,24 @@ config TRACE_DRIVERS
 config TRACE_FS
 	bool "Enable tracepoints in fs"
 	default n
+
+if TRACE_FS
+menu "Trace Fs Support"
+
+config TRACE_LITTLEFS_FS
+	bool "Enable tracepoints in littlefs"
+	default n
+
+config TRACE_ROMFS_FS
+	bool "Enable tracepoints in romfs"
+	default n
+
+config TRACE_RPMSGFS_FS
+	bool "Enable tracepoints in rpmsgfs"
+	default n
+
+endmenu # Trace Fs Support
+endif
 
 config TRACE_GRAPHICS
 	bool "Enable tracepoints in graphics"
@@ -2432,6 +2578,44 @@ config DEBUG_OPTLEVEL
 		This string represents the custom optimization level that will be
 		used if DEBUG_CUSTOMOPT.
 
+choice
+	prompt "Link Time Optimization (LTO)"
+	default LTO_NONE
+	---help---
+		This option enables Link Time Optimization (LTO), which allows the
+		compiler to optimize binaries globally.
+
+		If unsure, select LTO_NONE. Note that LTO is very resource-intensive
+		so it's disabled by default.
+
+config LTO_NONE
+	bool "None"
+	---help---
+		Build the kernel normally, without Link Time Optimization (LTO).
+
+config LTO_FULL
+	bool "GNU Full LTO (EXPERIMENTAL)"
+	depends on ARCH_TOOLCHAIN_GNU
+	---help---
+		Link time optimization is implemented as a GCC front end for a bytecode
+		bytecode representation of GIMPLE that is emitted in special sections
+		of .o files. Currently, LTO support is enabled in most ELF-based systems,
+		as well as darwin, cygwin and mingw systems.
+
+config LTO_THIN
+	bool "Clang ThinLTO (EXPERIMENTAL)"
+	depends on ARCH_TOOLCHAIN_CLANG
+	---help---
+		This option enables Clang's ThinLTO, which allows for parallel
+		optimization and faster incremental compiles compared to the
+		CONFIG_LTO_FULL option. More information can be found
+		from Clang's documentation:
+
+		https://clang.llvm.org/docs/ThinLTO.html
+
+		If unsure, say Y.
+endchoice
+
 config DEBUG_OPT_UNUSED_SECTIONS
 	bool "Optimization to eliminate the unused input sections"
 	default y
@@ -2444,6 +2628,14 @@ config DEBUG_OPT_UNUSED_SECTIONS
 		Enable this option to optimization the unused input sections with the
 		linker by compiling with " -ffunction-sections -fdata-sections ", and
 		linking with " --gc-sections ".
+
+config DEBUG_LINK_WHOLE_ARCHIVE
+	bool "Force every object to be included in the resulting shared library."
+	default n
+	depends on DEBUG_OPT_UNUSED_SECTIONS
+	---help---
+		Selecting this option will pass "--whole-archive" to ld
+		when linking NuttX ELF.
 
 config DEBUG_LINK_MAP
 	bool "Generate link map file"

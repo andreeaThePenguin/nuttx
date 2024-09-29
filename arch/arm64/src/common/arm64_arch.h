@@ -133,13 +133,6 @@
 #define MODE_EL1            (0x1)
 #define MODE_EL0            (0x0)
 
-/* struct arm64_boot_params member offset for assembly code
- * struct is defined at arm64_cpustart.c
- */
-
-#define BOOT_PARAM_MPID     0
-#define BOOT_PARAM_SP       8
-
 #ifndef __ASSEMBLY__
 
 /****************************************************************************
@@ -148,38 +141,10 @@
 
 #define GET_EL(mode)  (((mode) >> MODE_EL_SHIFT) & MODE_EL_MASK)
 
-/* MPIDR_EL1, Multiprocessor Affinity Register */
-
-#define MPIDR_AFFLVL_MASK   (0xff)
-#define MPIDR_ID_MASK       (0xff00ffffff)
-
-#define MPIDR_AFF0_SHIFT    (0)
-#define MPIDR_AFF1_SHIFT    (8)
-#define MPIDR_AFF2_SHIFT    (16)
-#define MPIDR_AFF3_SHIFT    (32)
-
-/* mpidr_el1 register, the register is define:
- *   - bit 0~7:   Aff0
- *   - bit 8~15:  Aff1
- *   - bit 16~23: Aff2
- *   - bit 24:    MT, multithreading
- *   - bit 25~29: RES0
- *   - bit 30:    U, multiprocessor/Uniprocessor
- *   - bit 31:    RES1
- *   - bit 32~39: Aff3
- *   - bit 40~63: RES0
- *   Different ARM64 Core will use different Affn define, the mpidr_el1
- *  value is not CPU number, So we need to change CPU number to mpid
- *  and vice versa
- */
-
-#define GET_MPIDR()             read_sysreg(mpidr_el1)
+#define MPIDR_ID_MASK (0xff00ffffff)
 
 #define MPIDR_AFFLVL(mpidr, aff_level) \
   (((mpidr) >> MPIDR_AFF ## aff_level ## _SHIFT) & MPIDR_AFFLVL_MASK)
-
-#define MPID_TO_CORE(mpid, aff_level) \
-  (((mpid) >> MPIDR_AFF ## aff_level ## _SHIFT) & MPIDR_AFFLVL_MASK)
 
 #define CORE_TO_MPID(core, aff_level) \
   ({ \
@@ -291,25 +256,7 @@
  *  to these memory regions.
  */
 
-#define CONFIG_MAX_XLAT_TABLES      7
-
-/* Virtual address space size
- * Allows choosing one of multiple possible virtual address
- * space sizes. The level of translation table is determined by
- * a combination of page size and virtual address space size.
- *
- * The choice could be: 32, 36, 42, 48
- */
-
-#define CONFIG_ARM64_VA_BITS        36
-
-/* Physical address space size
- * Choose the maximum physical address range that the kernel will support.
- *
- * The choice could be: 32, 36, 42, 48
- */
-
-#define CONFIG_ARM64_PA_BITS        36
+#define CONFIG_MAX_XLAT_TABLES      10
 
 #define L1_CACHE_SHIFT              (6)
 #define L1_CACHE_BYTES              BIT(L1_CACHE_SHIFT)
@@ -345,8 +292,6 @@ struct regs_context
   uint64_t  spsr;
   uint64_t  sp_el0;
   uint64_t  exe_depth;
-  uint64_t  tpidr_el0;
-  uint64_t  tpidr_el1;
 };
 
 /****************************************************************************
@@ -441,6 +386,26 @@ static inline void arch_nop(void)
 
 /****************************************************************************
  * Name:
+ *   arm64_current_el()
+ *
+ * Description:
+ *
+ *   Get current execution level
+ *
+ ****************************************************************************/
+
+#define arm64_current_el()                \
+  ({                                      \
+    uint64_t __el;                        \
+    int      __ret;                       \
+    __asm__ volatile ("mrs %0, CurrentEL" \
+                      : "=r" (__el));     \
+    __ret = GET_EL(__el);                 \
+    __ret;                                \
+  })
+
+/****************************************************************************
+ * Name:
  *   read_/write_/zero_ sysreg
  *
  * Description:
@@ -495,24 +460,16 @@ void modifyreg32(unsigned int addr, uint32_t clearbits, uint32_t setbits);
 /****************************************************************************
  * Name:
  *   arch_get_exception_depth
- *   arch_get_current_tcb
  *
  * Description:
  *   tpidrro_el0 is used to record exception depth, it's used for fpu trap
  * happened at exception context (like IRQ).
- *   tpidr_el1 is used to record TCB at present, it's used for fpu and task
- * switch propose
  *
  ****************************************************************************/
 
 static inline int arch_get_exception_depth(void)
 {
   return read_sysreg(tpidrro_el0);
-}
-
-static inline uint64_t arch_get_current_tcb(void)
-{
-  return read_sysreg(tpidr_el1);
 }
 
 void arch_cpu_idle(void);

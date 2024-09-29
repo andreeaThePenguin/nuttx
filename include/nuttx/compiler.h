@@ -69,16 +69,6 @@
 #  define CONFIG_DESIGNATED_INITIALIZERS 1
 #endif
 
-/* ISO C/C++11 atomic types support */
-
-#undef CONFIG_HAVE_ATOMICS
-
-#if ((defined(__cplusplus) && __cplusplus >= 201103L) || \
-     (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L)) && \
-    !defined(__STDC_NO_ATOMICS__)
-#  define CONFIG_HAVE_ATOMICS
-#endif
-
 /* C++ support */
 
 #undef CONFIG_HAVE_CXX14
@@ -87,12 +77,23 @@
 #  define CONFIG_HAVE_CXX14 1
 #endif
 
+/* Green Hills Software definitions *****************************************/
+
+#if defined(__ghs__)
+
+#  define __extension__
+#  define register
+
+#endif
+
+#undef offsetof
+
 /* GCC-specific definitions *************************************************/
 
 #ifdef __GNUC__
 
 /* Built-ins */
-#  if __GNUC__ >= 4
+#  if __GNUC__ >= 4 && !defined(__ghs__)
 #    define CONFIG_HAVE_BUILTIN_BSWAP16 1
 #    define CONFIG_HAVE_BUILTIN_BSWAP32 1
 #    define CONFIG_HAVE_BUILTIN_BSWAP64 1
@@ -260,6 +261,16 @@
 
 #  define nosanitize_address __attribute__((no_sanitize_address))
 
+/* the Greenhills compiler do not support the following atttributes */
+
+#  if defined(__ghs__)
+#    undef nooptimiziation_function
+#    define nooptimiziation_function
+
+#    undef nosanitize_address
+#    define nosanitize_address
+#  endif
+
 /* The nosanitize_undefined attribute informs GCC don't sanitize it */
 
 #  define nosanitize_undefined __attribute__((no_sanitize("undefined")))
@@ -366,6 +377,15 @@
 #    undef  CONFIG_PTR_IS_NOT_INT
 
 #  elif defined(__AVR__)
+
+#    if defined(__AVR_2_BYTE_PC__) || defined(__AVR_3_BYTE_PC__)
+/* 2-byte 3-byte PC does not support returnaddress */
+
+#      undef return_address
+#      define return_address(x) 0
+
+#    endif
+
 #    if defined(CONFIG_AVR_HAS_MEMX_PTR)
 /* I-space access qualifiers needed by Harvard architecture */
 
@@ -491,8 +511,8 @@
 /* CMSE extention */
 
 #  ifdef CONFIG_ARCH_HAVE_TRUSTZONE
-#    define cmse_nonsecure_entry __attribute__((cmse_nonsecure_entry))
-#    define cmse_nonsecure_call __attribute__((cmse_nonsecure_call))
+#    define tz_nonsecure_entry __attribute__((cmse_nonsecure_entry))
+#    define tz_nonsecure_call  __attribute__((cmse_nonsecure_call))
 #  endif
 
 /* SDCC-specific definitions ************************************************/
@@ -579,6 +599,7 @@
 #  define malloc_like1(a)
 #  define malloc_like2(a, b)
 #  define realloc_like(a)
+#  define realloc_like2(a, b)
 
 #  define format_like(a)
 #  define printf_like(a, b)
@@ -722,6 +743,7 @@
 #  define malloc_like1(a)
 #  define malloc_like2(a, b)
 #  define realloc_like(a)
+#  define realloc_like2(a, b)
 #  define format_like(a)
 #  define printf_like(a, b)
 #  define syslog_like(a, b)
@@ -835,6 +857,7 @@
 #  define malloc_like1(a)
 #  define malloc_like2(a, b)
 #  define realloc_like(a)
+#  define realloc_like2(a, b)
 #  define format_like(a)
 #  define printf_like(a, b)
 #  define syslog_like(a, b)
@@ -884,7 +907,7 @@
 
 /* Pre-processor */
 
-#  define CONFIG_CPP_HAVE_VARARGS 1 /* Supports variable argument macros */
+#  undef CONFIG_CPP_HAVE_VARARGS /* No variable argument macros */
 
 /* Intriniscs */
 
@@ -927,11 +950,14 @@
 #  define malloc_like1(a)
 #  define malloc_like2(a, b)
 #  define realloc_like(a)
+#  define realloc_like2(a, b)
 #  define format_like(a)
 #  define printf_like(a, b)
 #  define syslog_like(a, b)
 #  define scanf_like(a, b)
 #  define strftime_like(a)
+#  define object_size(o, t) ((size_t)-1)
+#  define typeof __typeof__
 
 #  define FAR
 #  define NEAR
@@ -989,7 +1015,8 @@
 #  define end_packed_struct             __attribute__((packed))
 #  define reentrant_function
 #  define naked_function
-#  define always_inline_function        __attribute__((always_inline))
+#  define always_inline_function        __attribute__((always_inline,no_instrument_function))
+#  define inline_function               __attribute__((always_inline)) inline
 #  define noinline_function             __attribute__((noinline))
 #  define noinstrument_function
 #  define nooptimiziation_function      __attribute__((optimize(0)))
@@ -1006,6 +1033,7 @@
 #  define malloc_like1(a)
 #  define malloc_like2(a, b)
 #  define realloc_like(a)
+#  define realloc_like2(a, b)
 #  define format_like(a)
 #  define printf_like(a, b)
 #  define syslog_like(a, b)
@@ -1073,6 +1101,7 @@
 #  define malloc_like1(a)
 #  define malloc_like2(a, b)
 #  define realloc_like(a)
+#  define realloc_like2(a, b)
 #  define format_like(a)
 #  define printf_like(a, b)
 #  define syslog_like(a, b)

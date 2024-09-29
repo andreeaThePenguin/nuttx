@@ -186,7 +186,7 @@ void up_initial_state(struct tcb_s *tcb)
 
 noinline_function void arm_initialize_stack(void)
 {
-  uint32_t stacklim = up_get_intstackbase(up_cpu_index());
+  uint32_t stacklim = up_get_intstackbase(this_cpu());
   uint32_t stack = stacklim + INTSTACK_SIZE;
   uint32_t temp = 0;
 
@@ -204,6 +204,7 @@ noinline_function void arm_initialize_stack(void)
       "mrs %1, msplim\n"
       "msr psplim, %1\n"
 #endif
+      "isb sy\n"
 
       /* Select PSP */
 
@@ -219,6 +220,7 @@ noinline_function void arm_initialize_stack(void)
 #ifdef CONFIG_ARMV8M_STACKCHECK_HARDWARE
       "msr msplim, %2\n"
 #endif
+      "isb sy\n"
       :
 #ifdef CONFIG_ARMV8M_STACKCHECK_HARDWARE
       : "r" (stack), "r" (temp), "r" (stacklim)

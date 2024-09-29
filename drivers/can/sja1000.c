@@ -282,13 +282,12 @@ static void sja1000_reset(struct can_dev_s *dev)
       sja1000_putreg(priv, SJA1000_MODE_REG, 0);
     }
 
-  /* Abort transmission, release RX buffer and clear overrun.
+  /* Abort transmission and clear overrun.
    * Command register can only be modified when in Operation Mode.
    */
 
-  sja1000_putreg(priv, SJA1000_CMD_REG, SJA1000_ABORT_TX_M
-                                               | SJA1000_RELEASE_BUF_M
-                                               | SJA1000_CLR_OVERRUN_M);
+  sja1000_putreg(priv,
+      SJA1000_CMD_REG, SJA1000_ABORT_TX_M | SJA1000_CLR_OVERRUN_M);
 
 #ifdef CONFIG_ARCH_HAVE_MULTICPU
   spin_unlock_irqrestore(&priv->lock, flags);
@@ -918,8 +917,6 @@ static void sja1000_set_acc_filter(struct sja1000_dev_s *priv,
                                    bool single_filter)
 {
   uint32_t regval;
-  uint32_t code_swapped = __builtin_bswap32(code);
-  uint32_t mask_swapped = __builtin_bswap32(mask);
 
   regval = sja1000_getreg(priv, SJA1000_MODE_REG);
   if (single_filter)
@@ -936,9 +933,9 @@ static void sja1000_set_acc_filter(struct sja1000_dev_s *priv,
   for (int i = 0; i < 4; i++)
     {
       sja1000_putreg(priv, (SJA1000_DATA_0_REG + i),
-                   ((code_swapped >> (i * 8)) & 0xff));
+                     ((code >> ((3 - i) * 8)) & 0xff));
       sja1000_putreg(priv, (SJA1000_DATA_4_REG + i),
-                   ((mask_swapped >> (i * 8)) & 0xff));
+                     ((mask >> ((3 - i) * 8)) & 0xff));
     }
 }
 

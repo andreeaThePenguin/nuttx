@@ -106,7 +106,10 @@ static ssize_t spi_slave_write(FAR struct file *filep,
                                FAR const char *buffer, size_t buflen);
 static int     spi_slave_poll(FAR struct file *filep, FAR struct pollfd *fds,
                               bool setup);
+
+#ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
 static int     spi_slave_unlink(FAR struct inode *inode);
+#endif
 
 /* SPI Slave driver methods */
 
@@ -171,18 +174,17 @@ static const struct spi_slave_devops_s g_spisdev_ops =
 
 static int spi_slave_open(FAR struct file *filep)
 {
-  FAR struct inode *inode;
   FAR struct spi_slave_driver_s *priv;
   int ret;
 
-  DEBUGASSERT(filep->f_inode->i_private != NULL);
+  /* Sanity check */
 
+  DEBUGASSERT(filep->f_inode->i_private != NULL);
   spiinfo("filep: %p\n", filep);
 
   /* Get our private data structure */
 
-  inode = filep->f_inode;
-  priv = inode->i_private;
+  priv = filep->f_inode->i_private;
 
   /* Get exclusive access to the SPI Slave driver state structure */
 
@@ -226,18 +228,17 @@ static int spi_slave_open(FAR struct file *filep)
 
 static int spi_slave_close(FAR struct file *filep)
 {
-  FAR struct inode *inode;
   FAR struct spi_slave_driver_s *priv;
   int ret;
 
-  DEBUGASSERT(filep->f_inode->i_private != NULL);
+  /* Sanity check */
 
+  DEBUGASSERT(filep->f_inode->i_private != NULL);
   spiinfo("filep: %p\n", filep);
 
   /* Get our private data structure */
 
-  inode = filep->f_inode;
-  priv = inode->i_private;
+  priv = filep->f_inode->i_private;
 
   /* Get exclusive access to the SPI Slave driver state structure */
 
@@ -270,7 +271,7 @@ static int spi_slave_close(FAR struct file *filep)
     {
       nxmutex_destroy(&priv->lock);
       kmm_free(priv);
-      inode->i_private = NULL;
+      filep->f_inode->i_private = NULL;
       return OK;
     }
 
@@ -299,18 +300,19 @@ static int spi_slave_close(FAR struct file *filep)
 static ssize_t spi_slave_read(FAR struct file *filep, FAR char *buffer,
                            size_t buflen)
 {
-  FAR struct inode *inode;
   FAR struct spi_slave_driver_s *priv;
   size_t read_bytes;
   size_t remaining_words;
   int ret;
 
+  /* Sanity check */
+
+  DEBUGASSERT(filep->f_inode->i_private != NULL);
   spiinfo("filep=%p buffer=%p buflen=%zu\n", filep, buffer, buflen);
 
   /* Get our private data structure */
 
-  inode = filep->f_inode;
-  priv  = inode->i_private;
+  priv  = filep->f_inode->i_private;
 
   if (buffer == NULL)
     {
@@ -318,7 +320,6 @@ static ssize_t spi_slave_read(FAR struct file *filep, FAR char *buffer,
       return -ENOBUFS;
     }
 
-  priv->rx_length = MIN(buflen, sizeof(priv->rx_buffer));
   ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
     {
@@ -391,17 +392,18 @@ static ssize_t spi_slave_read(FAR struct file *filep, FAR char *buffer,
 static ssize_t spi_slave_write(FAR struct file *filep,
                                FAR const char *buffer, size_t buflen)
 {
-  FAR struct inode *inode;
   FAR struct spi_slave_driver_s *priv;
   size_t enqueued_bytes;
   int ret;
 
+  /* Sanity check */
+
+  DEBUGASSERT(filep->f_inode->i_private != NULL);
   spiinfo("filep=%p buffer=%p buflen=%zu\n", filep, buffer, buflen);
 
   /* Get our private data structure */
 
-  inode = filep->f_inode;
-  priv = inode->i_private;
+  priv = filep->f_inode->i_private;
 
   ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
@@ -450,13 +452,15 @@ static int spi_slave_poll(FAR struct file *filep, FAR struct pollfd *fds,
                           bool setup)
 {
   FAR struct spi_slave_driver_s *priv;
-  FAR struct inode *inode;
   int ret;
+
+  /* Sanity check */
+
+  DEBUGASSERT(filep->f_inode->i_private != NULL);
 
   /* Get our private data structure */
 
-  inode = filep->f_inode;
-  priv = inode->i_private;
+  priv = filep->f_inode->i_private;
 
   ret = nxmutex_lock(&priv->lock);
   if (ret < 0)
@@ -521,6 +525,8 @@ static int spi_slave_unlink(FAR struct inode *inode)
 {
   FAR struct spi_slave_driver_s *priv;
   int ret;
+
+  /* Sanity check */
 
   DEBUGASSERT(inode->i_private != NULL);
 
@@ -663,11 +669,11 @@ static size_t spi_slave_getdata(FAR struct spi_slave_dev_s *dev,
  *   synchronization by several words.
  *
  * Input Parameters:
- *   dev  - SPI Slave device interface instance
- *   data - Pointer to the new data that has been shifted in
- *   len  - Length of the new data in units of nbits wide,
- *          nbits being the data width previously provided to the bind()
- *          method.
+ *   dev    - SPI Slave device interface instance
+ *   data   - Pointer to the new data that has been shifted in
+ *   nwords - Length of the new data in units of nbits wide,
+ *            nbits being the data width previously provided to the bind()
+ *            method.
  *
  * Returned Value:
  *   Number of units accepted by the device. In other words,
@@ -682,10 +688,10 @@ static size_t spi_slave_getdata(FAR struct spi_slave_dev_s *dev,
  ****************************************************************************/
 
 static size_t spi_slave_receive(FAR struct spi_slave_dev_s *dev,
-                                FAR const void *data, size_t len)
+                                FAR const void *data, size_t nwords)
 {
   FAR struct spi_slave_driver_s *priv = (FAR struct spi_slave_driver_s *)dev;
-  size_t recv_bytes = MIN(len, priv->rx_length);
+  size_t recv_bytes = MIN(WORDS2BYTES(nwords), sizeof(priv->rx_buffer));
 
   memcpy(priv->rx_buffer, data, recv_bytes);
 

@@ -1,6 +1,8 @@
 /****************************************************************************
  * mm/mm_heap/mm.h
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -261,7 +263,8 @@ struct mm_heap_s
 
   /* The is a multiple mempool of the heap */
 
-#if CONFIG_MM_HEAP_MEMPOOL_THRESHOLD != 0
+#ifdef CONFIG_MM_HEAP_MEMPOOL
+  size_t                         mm_threshold;
   FAR struct mempool_multiple_s *mm_mpool;
 #endif
 

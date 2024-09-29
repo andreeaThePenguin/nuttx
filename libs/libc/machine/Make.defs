@@ -18,9 +18,7 @@
 #
 ############################################################################
 
-ifeq ($(CONFIG_LIBC_ARCH_ATOMIC),y)
-  CSRCS += arch_atomic.c
-endif
+CSRCS += arch_atomic.c
 
 ifeq ($(CONFIG_ARCH_ARM),y)
 include $(TOPDIR)/libs/libc/machine/arm/Make.defs
@@ -36,6 +34,9 @@ include $(TOPDIR)/libs/libc/machine/sim/Make.defs
 endif
 ifeq ($(CONFIG_ARCH_X86),y)
 include $(TOPDIR)/libs/libc/machine/x86/Make.defs
+endif
+ifeq ($(CONFIG_ARCH_X86_64),y)
+include $(TOPDIR)/libs/libc/machine/x86_64/Make.defs
 endif
 ifeq ($(CONFIG_ARCH_XTENSA),y)
 include $(TOPDIR)/libs/libc/machine/xtensa/Make.defs

@@ -59,8 +59,8 @@
  *            all memory accesses are complete
  */
 
-#define SP_DSB(n) __asm__ __volatile__ ("dsb sy" : : : "memory")
-#define SP_DMB(n) __asm__ __volatile__ ("dmb st" : : : "memory")
+#define SP_DSB() __asm__ __volatile__ ("dsb sy" : : : "memory")
+#define SP_DMB() __asm__ __volatile__ ("dmb st" : : : "memory")
 
 #ifdef CONFIG_ARM_HAVE_WFE_SEV
 #define SP_WFE() __asm__ __volatile__ ("wfe" : : : "memory")
@@ -113,6 +113,34 @@ typedef uint8_t spinlock_t;
  *   (meaning that we successfully obtained the lock)
  *
  ****************************************************************************/
+
+#if defined(CONFIG_ARCH_HAVE_TESTSET) \
+    && !defined(CONFIG_ARCH_CHIP_LC823450) \
+    && !defined(CONFIG_ARCH_CHIP_CXD56XX) \
+    && !defined(CONFIG_ARCH_CHIP_RP2040)
+static inline_function spinlock_t up_testset(volatile spinlock_t *lock)
+{
+  spinlock_t ret = SP_UNLOCKED;
+
+  __asm__ __volatile__
+  (
+    "1:                    \n"
+    "ldrexb   %0, [%2]     \n"
+    "cmp      %0, %1       \n"
+    "beq      2f           \n"
+    "strexb   %0, %1, [%2] \n"
+    "cmp      %0, %1       \n"
+    "beq      1b           \n"
+    "dmb                   \n"
+    "2:                    \n"
+    : "+r" (ret)
+    : "r" (SP_LOCKED), "r" (lock)
+    : "memory"
+  );
+
+  return ret;
+}
+#endif
 
 /* See prototype in nuttx/include/nuttx/spinlock.h */
 

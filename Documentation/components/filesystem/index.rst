@@ -538,6 +538,7 @@ NuttX provides support for a variety of file systems out of the box.
   hostfs.rst
   littlefs.rst
   mmap.rst
+  mnemofs.rst
   nfs.rst
   nxffs.rst
   partition.rst
@@ -551,6 +552,7 @@ NuttX provides support for a variety of file systems out of the box.
   unionfs.rst
   userfs.rst
   zipfs.rst
+  inotify.rst
 
 FS Categories
 -------------

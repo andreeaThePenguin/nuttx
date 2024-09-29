@@ -41,6 +41,26 @@
  ****************************************************************************/
 
 /****************************************************************************
+ * Name: up_get_icache_size
+ *
+ * Description:
+ *   Get icache size
+ *
+ * Input Parameters:
+ *   None
+ *
+ * Returned Value:
+ *   Cache size
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_XTENSA_ICACHE
+size_t up_get_icache_size(void)
+{
+  return XCHAL_ICACHE_SIZE;
+}
+
+/****************************************************************************
  * Name: up_get_icache_linesize
  *
  * Description:
@@ -54,7 +74,6 @@
  *
  ****************************************************************************/
 
-#ifdef CONFIG_XTENSA_ICACHE
 size_t up_get_icache_linesize(void)
 {
   return XCHAL_ICACHE_LINESIZE;
@@ -267,6 +286,26 @@ void up_unlock_icache_all(void)
 #endif
 
 /****************************************************************************
+ * Name: up_get_dcache_size
+ *
+ * Description:
+ *   Get dcache size
+ *
+ * Input Parameters:
+ *   None
+ *
+ * Returned Value:
+ *   Cache size
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_XTENSA_DCACHE
+size_t up_get_dcache_size(void)
+{
+  return XCHAL_DCACHE_SIZE;
+}
+
+/****************************************************************************
  * Name: up_get_dcache_linesize
  *
  * Description:
@@ -280,7 +319,6 @@ void up_unlock_icache_all(void)
  *
  ****************************************************************************/
 
-#ifdef CONFIG_XTENSA_DCACHE
 size_t up_get_dcache_linesize(void)
 {
   return XCHAL_DCACHE_LINESIZE;
@@ -460,10 +498,12 @@ void up_clean_dcache(uintptr_t start, uintptr_t end)
 
   start &= ~(XCHAL_DCACHE_LINESIZE - 1);
 
+#ifndef CONFIG_SMP
   if ((end - start) >= XCHAL_DCACHE_SIZE)
     {
       return up_clean_dcache_all();
     }
+#endif
 
   for (; start < end; start += XCHAL_DCACHE_LINESIZE)
     {
@@ -542,10 +582,12 @@ void up_flush_dcache(uintptr_t start, uintptr_t end)
 
   start &= ~(XCHAL_DCACHE_LINESIZE - 1);
 
+#ifndef CONFIG_SMP
   if ((end - start) >= XCHAL_DCACHE_SIZE)
     {
       return up_clean_dcache_all();
     }
+#endif
 
   for (; start < end; start += XCHAL_DCACHE_LINESIZE)
     {

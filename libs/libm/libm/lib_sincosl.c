@@ -27,13 +27,22 @@
 
 #include <math.h>
 
+/* Disable sincos optimization for all functions in this file,
+ * otherwise gcc would generate infinite calls.
+ * Refer to gcc PR46926.
+ * -fno-builtin-sin or -fno-builtin-cos can disable sincos optimization,
+ * but these two options do not work inside optimize pragma in-file.
+ * Thus we just enforce -O0 when compiling this file.
+ */
+
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
 
 #ifdef CONFIG_HAVE_LONG_DOUBLE
 
-void sincosl(long double x, long double *s, long double *c)
+nooptimiziation_function
+void sincosl(long double x, FAR long double *s, FAR long double *c)
 {
   *s = sinl(x);
   *c = cosl(x);

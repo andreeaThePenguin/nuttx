@@ -79,12 +79,8 @@ int arm_start_handler(int irq, void *context, void *arg)
 
   nxsched_resume_scheduler(tcb);
 
-  /* Then switch contexts. This instantiates the exception context of the
-   * tcb at the head of the assigned task list.  In this case, this should
-   * be the CPUs NULL task.
-   */
+  UNUSED(tcb);
 
-  arm_restorestate(tcb->xcp.regs);
   return OK;
 }
 
@@ -129,7 +125,7 @@ int up_cpu_start(int cpu)
 
   /* Execute SGI1 */
 
-  arm_cpu_sgi(GIC_IRQ_SGI1, (1 << cpu));
+  arm_cpu_sgi(GIC_SMP_CPUSTART, (1 << cpu));
   return OK;
 }
 

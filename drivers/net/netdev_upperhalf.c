@@ -54,6 +54,12 @@
 #  define NETDEV_WORK LPWORK
 #endif
 
+#ifdef CONFIG_NETDEV_RSS
+#  define NETDEV_THREAD_COUNT CONFIG_SMP_NCPUS
+#else
+#  define NETDEV_THREAD_COUNT 1
+#endif
+
 /****************************************************************************
  * Private Types
  ****************************************************************************/
@@ -67,53 +73,23 @@ struct netdev_upperhalf_s
   /* Deferring poll work to work queue or thread */
 
 #ifdef CONFIG_NETDEV_WORK_THREAD
-  pid_t tid;
-  sem_t sem;
-  sem_t sem_exit;
+  pid_t tid[NETDEV_THREAD_COUNT];
+  sem_t sem[NETDEV_THREAD_COUNT];
+  sem_t sem_exit[NETDEV_THREAD_COUNT];
 #else
   struct work_s work;
+#endif
+
+  /* TX queue for re-queueing replies */
+
+#if CONFIG_IOB_NCHAINS > 0
+  struct iob_queue_s txq;
 #endif
 };
 
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
-
-/****************************************************************************
- * Name: quota_fetch_inc/dec
- *
- * Description:
- *   Fetch the quota and add/sub one to it.  It works like atomic_fetch_xxx,
- *   just because currently we don't have atomic on some platform.  We may
- *   switch to atomic later.
- *
- ****************************************************************************/
-
-static int quota_fetch_inc(FAR struct netdev_lowerhalf_s *lower,
-                           enum netpkt_type_e type)
-{
-#ifndef CONFIG_HAVE_ATOMICS
-  irqstate_t flags = spin_lock_irqsave(&lower->lock);
-  int ret = lower->quota[type]++;
-  spin_unlock_irqrestore(&lower->lock, flags);
-  return ret;
-#else
-  return atomic_fetch_add(&lower->quota[type], 1);
-#endif
-}
-
-static int quota_fetch_dec(FAR struct netdev_lowerhalf_s *lower,
-                           enum netpkt_type_e type)
-{
-#ifndef CONFIG_HAVE_ATOMICS
-  irqstate_t flags = spin_lock_irqsave(&lower->lock);
-  int ret = lower->quota[type]--;
-  spin_unlock_irqrestore(&lower->lock, flags);
-  return ret;
-#else
-  return atomic_fetch_sub(&lower->quota[type], 1);
-#endif
-}
 
 /****************************************************************************
  * Name: quota_is_valid
@@ -126,9 +102,9 @@ static int quota_fetch_dec(FAR struct netdev_lowerhalf_s *lower,
 static bool quota_is_valid(FAR struct netdev_lowerhalf_s *lower)
 {
   int total = 0;
-  int type;
+  enum netpkt_type_e type;
 
-  for (type = 0; type < NETPKT_TYPENUM; type++)
+  for (type = NETPKT_TX; type < NETPKT_TYPENUM; type++)
     {
       total += netdev_lower_quota_load(lower, type);
     }
@@ -177,7 +153,7 @@ static FAR netpkt_t *netpkt_get(FAR struct net_driver_s *dev,
    * cases will be limited by netdev_upper_can_tx and seldom reaches here.
    */
 
-  if (quota_fetch_dec(upper->lower, type) <= 0)
+  if (atomic_fetch_sub(&upper->lower->quota[type], 1) <= 0)
     {
       nwarn("WARNING: Allowing temperarily exceeding quota of %s.\n",
             dev->d_ifname);
@@ -209,7 +185,7 @@ static void netpkt_put(FAR struct net_driver_s *dev, FAR netpkt_t *pkt,
    *       but we don't want these changes.
    */
 
-  quota_fetch_inc(upper->lower, type);
+  atomic_fetch_add(&upper->lower->quota[type], 1);
   netdev_iob_release(dev);
   dev->d_iob = pkt;
   dev->d_len = netpkt_getdatalen(upper->lower, pkt);
@@ -258,7 +234,16 @@ netdev_upper_alloc(FAR struct netdev_lowerhalf_s *dev)
 
 static inline bool netdev_upper_can_tx(FAR struct netdev_upperhalf_s *upper)
 {
-  return netdev_lower_quota_load(upper->lower, NETPKT_TX) > 0;
+  FAR struct netdev_lowerhalf_s *lower = upper->lower;
+  int quota = netdev_lower_quota_load(lower, NETPKT_TX);
+
+  if (quota <= 0 && lower->ops->reclaim)
+    {
+      lower->ops->reclaim(lower);
+      quota = netdev_lower_quota_load(lower, NETPKT_TX);
+    }
+
+  return quota > 0;
 }
 
 /****************************************************************************
@@ -279,7 +264,7 @@ static inline bool netdev_upper_can_tx(FAR struct netdev_upperhalf_s *upper)
  *
  * Returned Value:
  *   Negated errno value - Error number that occurs.
- *   OK                  - Driver can send more, continue the poll.
+ *   NETDEV_TX_CONTINUE  - Driver can send more, continue the poll.
  *
  * Assumptions:
  *   Called with the network locked.
@@ -330,6 +315,44 @@ static int netdev_upper_txpoll(FAR struct net_driver_s *dev)
 }
 
 /****************************************************************************
+ * Name: netdev_upper_tx
+ *
+ * Description:
+ *   Do the actual transmission of packets, including pre-queued packets and
+ *   packets from the network stack.
+ *
+ * Input Parameters:
+ *   dev - Reference to the NuttX driver state structure
+ *
+ * Returned Value:
+ *   Negated errno value - Error number that occurs.
+ *   NETDEV_TX_CONTINUE  - Driver can send more, continue the poll.
+ *
+ * Assumptions:
+ *   Called with the network locked.
+ *
+ ****************************************************************************/
+
+static int netdev_upper_tx(FAR struct net_driver_s *dev)
+{
+#if CONFIG_IOB_NCHAINS > 0
+  FAR struct netdev_upperhalf_s *upper = dev->d_private;
+
+  if (!IOB_QEMPTY(&upper->txq))
+    {
+      /* Put the packet back to the device */
+
+      netdev_iob_replace(dev, iob_remove_queue(&upper->txq));
+      return netdev_upper_txpoll(dev);
+    }
+#endif
+
+  /* No more TX packets in queue, poll the net stack to get more packets */
+
+  return devif_poll(dev, netdev_upper_txpoll);
+}
+
+/****************************************************************************
  * Name: netdev_upper_txavail_work
  *
  * Description:
@@ -353,9 +376,61 @@ static void netdev_upper_txavail_work(FAR struct netdev_upperhalf_s *upper)
     {
       DEBUGASSERT(dev->d_buf == NULL); /* Make sure: IOB only. */
       while (netdev_upper_can_tx(upper) &&
-             devif_poll(dev, netdev_upper_txpoll) == NETDEV_TX_CONTINUE);
+             netdev_upper_tx(dev) == NETDEV_TX_CONTINUE);
     }
 }
+
+/****************************************************************************
+ * Name: netdev_upper_queue_tx
+ *
+ * Description:
+ *   Queue a TX packet to the upper half for sending later.
+ *
+ * Input Parameters:
+ *   dev - Reference to the NuttX driver state structure
+ *
+ * Assumptions:
+ *   Called with the network locked.
+ *
+ ****************************************************************************/
+
+#if defined(CONFIG_NET_LOOPBACK) || defined(CONFIG_NET_ETHERNET) || \
+    defined(CONFIG_DRIVERS_IEEE80211) || defined(CONFIG_NET_MBIM)
+static void netdev_upper_queue_tx(FAR struct net_driver_s *dev)
+{
+#if CONFIG_IOB_NCHAINS > 0
+  FAR struct netdev_upperhalf_s *upper = dev->d_private;
+  int ret;
+
+  if ((ret = iob_tryadd_queue(dev->d_iob, &upper->txq)) >= 0)
+    {
+      netdev_iob_clear(dev);
+    }
+  else
+    {
+      nwarn("WARNING: Failed to queue TX packet, dropping: %d\n", ret);
+    }
+#else
+  /* Fall back to send the packet directly if we don't have IOB queue. */
+
+  netdev_upper_txpoll(dev);
+#endif
+}
+#endif
+
+/****************************************************************************
+ * Name: eth_input
+ *
+ * Description:
+ *   Handle L2 packet input.
+ *
+ * Input Parameters:
+ *   dev - Reference to the NuttX network driver state structure
+ *
+ * Assumptions:
+ *   Called with the network locked.
+ *
+ ****************************************************************************/
 
 #if defined(CONFIG_NET_LOOPBACK) || defined(CONFIG_NET_ETHERNET) || \
     defined(CONFIG_DRIVERS_IEEE80211)
@@ -432,9 +507,11 @@ static void eth_input(FAR struct net_driver_s *dev)
 
   if (dev->d_len > 0)
     {
-      /* And send the packet */
+      /* And queue the packet for sending later.
+       * Note: RX is tried before TX, so we don't need to call txavail here.
+       */
 
-      netdev_upper_txpoll(dev);
+      netdev_upper_queue_tx(dev);
     }
 }
 #endif
@@ -495,9 +572,11 @@ static void ip_input(FAR struct net_driver_s *dev)
 
   if (dev->d_len > 0)
     {
-      /* And send the packet */
+      /* And queue the packet for sending later.
+       * Note: RX is tried before TX, so we don't need to call txavail here.
+       */
 
-      netdev_upper_txpoll(dev);
+      netdev_upper_queue_tx(dev);
     }
 }
 #endif
@@ -527,8 +606,6 @@ static void netdev_upper_rxpoll_work(FAR struct netdev_upperhalf_s *upper)
 
   while ((pkt = lower->ops->receive(lower)) != NULL)
     {
-      NETDEV_RXPACKETS(dev);
-
       if (!IFF_IS_UP(dev->d_flags))
         {
           /* Interface down, drop frame */
@@ -539,6 +616,7 @@ static void netdev_upper_rxpoll_work(FAR struct netdev_upperhalf_s *upper)
         }
 
       netpkt_put(dev, pkt, NETPKT_RX);
+      NETDEV_RXPACKETS(dev);
 
 #ifdef CONFIG_NET_PKT
       /* When packet sockets are enabled, feed the frame into the tap */
@@ -581,7 +659,7 @@ static void netdev_upper_rxpoll_work(FAR struct netdev_upperhalf_s *upper)
 }
 
 /****************************************************************************
- * Name: netdev_upper_txavail_work
+ * Name: netdev_upper_work
  *
  * Description:
  *   Perform an out-of-cycle poll on a dedicated thread or the worker thread.
@@ -604,6 +682,27 @@ static void netdev_upper_work(FAR void *arg)
 }
 
 /****************************************************************************
+ * Name: netdev_upper_wait
+ *
+ * Description:
+ *   Wait for timeout or signal.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_NETDEV_WORK_THREAD
+static int netdev_upper_wait(FAR sem_t *sem)
+{
+#if CONFIG_NETDEV_WORK_THREAD_POLLING_PERIOD > 0
+  int ret =
+    nxsem_tickwait(sem, USEC2TICK(CONFIG_NETDEV_WORK_THREAD_POLLING_PERIOD));
+
+  return ret == -ETIMEDOUT ? OK : ret;
+#else
+  return nxsem_wait(sem);
+#endif
+}
+
+/****************************************************************************
  * Name: netdev_upper_loop
  *
  * Description:
@@ -611,19 +710,28 @@ static void netdev_upper_work(FAR void *arg)
  *
  ****************************************************************************/
 
-#ifdef CONFIG_NETDEV_WORK_THREAD
 static int netdev_upper_loop(int argc, FAR char *argv[])
 {
   FAR struct netdev_upperhalf_s *upper =
     (FAR struct netdev_upperhalf_s *)((uintptr_t)strtoul(argv[1], NULL, 16));
+  int cpu = atoi(argv[2]);
 
-  while (nxsem_wait(&upper->sem) == OK && upper->tid != INVALID_PROCESS_ID)
+#ifdef CONFIG_NETDEV_RSS
+  cpu_set_t cpuset;
+
+  CPU_ZERO(&cpuset);
+  CPU_SET(cpu, &cpuset);
+  sched_setaffinity(upper->tid[cpu], sizeof(cpu_set_t), &cpuset);
+#endif
+
+  while (netdev_upper_wait(&upper->sem[cpu]) == OK &&
+         upper->tid[cpu] != INVALID_PROCESS_ID)
     {
       netdev_upper_work(upper);
     }
 
   nwarn("WARNING: Netdev work thread quitting.");
-  nxsem_post(&upper->sem_exit);
+  nxsem_post(&upper->sem_exit[cpu]);
   return 0;
 }
 #endif
@@ -644,10 +752,13 @@ static inline void netdev_upper_queue_work(FAR struct net_driver_s *dev)
   FAR struct netdev_upperhalf_s *upper = dev->d_private;
 
 #ifdef CONFIG_NETDEV_WORK_THREAD
+  int cpu = this_cpu();
   int semcount;
-  if (nxsem_get_value(&upper->sem, &semcount) == OK && semcount <= 0)
+
+  if (nxsem_get_value(&upper->sem[cpu], &semcount) == OK &&
+      semcount <= 0)
     {
-      nxsem_post(&upper->sem);
+      nxsem_post(&upper->sem[cpu]);
     }
 #else
   if (work_available(&upper->work))
@@ -932,25 +1043,37 @@ static int netdev_upper_ifup(FAR struct net_driver_s *dev)
   FAR struct netdev_upperhalf_s *upper = dev->d_private;
 
 #ifdef CONFIG_NETDEV_WORK_THREAD
+  int i;
+
   /* Try to bring up a dedicated thread for work. */
 
-  if (upper->tid <= 0)
+  for (i = 0; i < NETDEV_THREAD_COUNT; i++)
     {
-      FAR char *argv[2];
-      char      arg1[32];
-      char      name[32];
-
-      snprintf(arg1, sizeof(arg1), "%p", upper);
-      snprintf(name, sizeof(name), NETDEV_THREAD_NAME_FMT, dev->d_ifname);
-      argv[0] = arg1;
-      argv[1] = NULL;
-
-      upper->tid = kthread_create(name, CONFIG_NETDEV_WORK_THREAD_PRIORITY,
-                                  CONFIG_DEFAULT_TASK_STACKSIZE,
-                                  netdev_upper_loop, argv);
-      if (upper->tid < 0)
+      if (upper->tid[i] <= 0)
         {
-          return upper->tid;
+          FAR char *argv[3];
+          char      arg1[32];
+          char      arg2[32];
+          char      name[32];
+
+          snprintf(arg1, sizeof(arg1), "%p", upper);
+          argv[0] = arg1;
+
+          snprintf(arg2, sizeof(arg2), "%d", i);
+          argv[1] = arg2;
+          argv[2] = NULL;
+
+          snprintf(name, sizeof(name), NETDEV_THREAD_NAME_FMT,
+                   dev->d_ifname);
+
+          upper->tid[i] = kthread_create(name,
+                                         CONFIG_NETDEV_WORK_THREAD_PRIORITY,
+                                         CONFIG_DEFAULT_TASK_STACKSIZE,
+                                         netdev_upper_loop, argv);
+          if (upper->tid[i] < 0)
+            {
+              return upper->tid[i];
+            }
         }
     }
 #endif
@@ -1062,6 +1185,9 @@ int netdev_lower_register(FAR struct netdev_lowerhalf_s *dev,
 {
   FAR struct netdev_upperhalf_s *upper;
   int ret;
+#ifdef CONFIG_NETDEV_WORK_THREAD
+  int i;
+#endif
 
   if (dev == NULL || quota_is_valid(dev) == false || dev->ops == NULL ||
       dev->ops->transmit == NULL || dev->ops->receive == NULL)
@@ -1074,9 +1200,6 @@ int netdev_lower_register(FAR struct netdev_lowerhalf_s *dev,
       return -ENOMEM;
     }
 
-#ifndef CONFIG_HAVE_ATOMICS
-  spin_initialize(&dev->lock, SP_UNLOCKED);
-#endif
   dev->netdev.d_ifup    = netdev_upper_ifup;
   dev->netdev.d_ifdown  = netdev_upper_ifdown;
   dev->netdev.d_txavail = netdev_upper_txavail;
@@ -1097,8 +1220,12 @@ int netdev_lower_register(FAR struct netdev_lowerhalf_s *dev,
     }
 
 #ifdef CONFIG_NETDEV_WORK_THREAD
-  nxsem_init(&upper->sem, 0, 0);
-  nxsem_init(&upper->sem_exit, 0, 0);
+  for (i = 0; i < NETDEV_THREAD_COUNT; i++)
+    {
+      upper->tid[i] = INVALID_PROCESS_ID;
+      nxsem_init(&upper->sem[i], 0, 0);
+      nxsem_init(&upper->sem_exit[i], 0, 0);
+    }
 #endif
 
   return ret;
@@ -1122,6 +1249,9 @@ int netdev_lower_unregister(FAR struct netdev_lowerhalf_s *dev)
 {
   FAR struct netdev_upperhalf_s *upper;
   int ret;
+#ifdef CONFIG_NETDEV_WORK_THREAD
+  int i;
+#endif
 
   if (dev == NULL || dev->netdev.d_private == NULL)
     {
@@ -1136,17 +1266,24 @@ int netdev_lower_unregister(FAR struct netdev_lowerhalf_s *dev)
     }
 
 #ifdef CONFIG_NETDEV_WORK_THREAD
-  if (upper->tid > 0)
+  for (i = 0; i < NETDEV_THREAD_COUNT; i++)
     {
-      /* Try to tear down the dedicated thread for work. */
+      if (upper->tid[i] > 0)
+        {
+          /* Try to tear down the dedicated thread for work. */
 
-      upper->tid = INVALID_PROCESS_ID;
-      nxsem_post(&upper->sem);
-      nxsem_wait(&upper->sem_exit);
+          upper->tid[i] = INVALID_PROCESS_ID;
+          nxsem_post(&upper->sem[i]);
+          nxsem_wait(&upper->sem_exit[i]);
+        }
+
+      nxsem_destroy(&upper->sem[i]);
+      nxsem_destroy(&upper->sem_exit[i]);
     }
+#endif
 
-  nxsem_destroy(&upper->sem);
-  nxsem_destroy(&upper->sem_exit);
+#if CONFIG_IOB_NCHAINS > 0
+  iob_free_queue(&upper->txq);
 #endif
 
   kmm_free(upper);
@@ -1202,7 +1339,9 @@ void netdev_lower_carrier_off(FAR struct netdev_lowerhalf_s *dev)
 
 void netdev_lower_rxready(FAR struct netdev_lowerhalf_s *dev)
 {
+#if CONFIG_NETDEV_WORK_THREAD_POLLING_PERIOD == 0
   netdev_upper_queue_work(&dev->netdev);
+#endif
 }
 
 /****************************************************************************
@@ -1219,7 +1358,9 @@ void netdev_lower_rxready(FAR struct netdev_lowerhalf_s *dev)
 void netdev_lower_txdone(FAR struct netdev_lowerhalf_s *dev)
 {
   NETDEV_TXDONE(&dev->netdev);
+#if CONFIG_NETDEV_WORK_THREAD_POLLING_PERIOD == 0
   netdev_upper_queue_work(&dev->netdev);
+#endif
 }
 
 /****************************************************************************
@@ -1237,14 +1378,7 @@ void netdev_lower_txdone(FAR struct netdev_lowerhalf_s *dev)
 int netdev_lower_quota_load(FAR struct netdev_lowerhalf_s *dev,
                             enum netpkt_type_e type)
 {
-#ifndef CONFIG_HAVE_ATOMICS
-  irqstate_t flags = spin_lock_irqsave(&dev->lock);
-  int ret = dev->quota[type];
-  spin_unlock_irqrestore(&dev->lock, flags);
-  return ret;
-#else
   return atomic_load(&dev->quota[type]);
-#endif
 }
 
 /****************************************************************************
@@ -1267,16 +1401,16 @@ FAR netpkt_t *netpkt_alloc(FAR struct netdev_lowerhalf_s *dev,
 {
   FAR netpkt_t *pkt;
 
-  if (quota_fetch_dec(dev, type) <= 0)
+  if (atomic_fetch_sub(&dev->quota[type], 1) <= 0)
     {
-      quota_fetch_inc(dev, type);
+      atomic_fetch_add(&dev->quota[type], 1);
       return NULL;
     }
 
   pkt = iob_tryalloc(false);
   if (pkt == NULL)
     {
-      quota_fetch_inc(dev, type);
+      atomic_fetch_add(&dev->quota[type], 1);
       return NULL;
     }
 
@@ -1300,7 +1434,7 @@ FAR netpkt_t *netpkt_alloc(FAR struct netdev_lowerhalf_s *dev,
 void netpkt_free(FAR struct netdev_lowerhalf_s *dev, FAR netpkt_t *pkt,
                  enum netpkt_type_e type)
 {
-  quota_fetch_inc(dev, type);
+  atomic_fetch_add(&dev->quota[type], 1);
   iob_free_chain(pkt);
 }
 

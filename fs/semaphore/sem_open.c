@@ -40,6 +40,7 @@
 #include <nuttx/fs/fs.h>
 
 #include "inode/inode.h"
+#include "notify/notify.h"
 #include "semaphore/semaphore.h"
 
 #ifdef CONFIG_FS_NAMED_SEMAPHORES
@@ -65,7 +66,8 @@
  *   calls to sem_unlink()).
  *
  * Input Parameters:
- *   name  - Semaphore name
+ *   sem    - Location to return the semaphore reference.
+ *   name   - Semaphore name.
  *   oflags - Semaphore creation options.  This may either or both of the
  *     following bit settings.
  *     oflags = 0:  Connect to the semaphore only if it already exists.
@@ -81,17 +83,16 @@
  *        SEM_VALUE_MAX.
  *
  * Returned Value:
- *   A pointer to sem_t or negated errno if unsuccessful.
+ *   0 (OK), or negated errno if unsuccessful.
  *
  * Assumptions:
  *
  ****************************************************************************/
 
-FAR sem_t *nxsem_open(FAR const char *name, int oflags, ...)
+int nxsem_open(FAR sem_t **sem, FAR const char *name, int oflags, ...)
 {
   FAR struct inode *inode;
   FAR struct nsem_inode_s *nsem;
-  FAR sem_t *sem;
   struct inode_search_s desc;
   char fullpath[MAX_SEMPATH];
   mode_t mode;
@@ -139,7 +140,7 @@ FAR sem_t *nxsem_open(FAR const char *name, int oflags, ...)
        * count on the inode.
        */
 
-      sem = &inode->u.i_nsem->ns_sem;
+      *sem = &inode->u.i_nsem->ns_sem;
     }
   else
     {
@@ -210,7 +211,7 @@ FAR sem_t *nxsem_open(FAR const char *name, int oflags, ...)
       /* Initialize the inode */
 
       INODE_SET_NAMEDSEM(inode);
-      inode->i_crefs = 1;
+      atomic_fetch_add(&inode->i_crefs, 1);
 
       /* Initialize the semaphore */
 
@@ -218,18 +219,21 @@ FAR sem_t *nxsem_open(FAR const char *name, int oflags, ...)
 
       /* Return a reference to the semaphore */
 
-      sem = &nsem->ns_sem;
+      *sem = &nsem->ns_sem;
     }
 
   RELEASE_SEARCH(&desc);
-  return sem;
+#ifdef CONFIG_FS_NOTIFY
+  notify_open(fullpath, oflags);
+#endif
+  return OK;
 
 errout_with_inode:
   inode_release(inode);
 
 errout_with_lock:
   RELEASE_SEARCH(&desc);
-  return (FAR sem_t *)(intptr_t)ret;
+  return ret;
 }
 
 #endif /* CONFIG_FS_NAMED_SEMAPHORES */

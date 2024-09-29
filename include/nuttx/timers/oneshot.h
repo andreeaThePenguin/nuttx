@@ -33,6 +33,7 @@
 #include <stdint.h>
 #include <time.h>
 
+#include <nuttx/clock.h>
 #include <nuttx/fs/ioctl.h>
 
 /****************************************************************************
@@ -269,7 +270,7 @@ int oneshot_max_delay(FAR struct oneshot_lowerhalf_s *lower,
   DEBUGASSERT(lower->ops->tick_max_delay);
 
   ret = lower->ops->tick_max_delay(lower, &tick);
-  timespec_from_tick(ts, tick);
+  clock_ticks2time(ts, tick);
   return ret;
 }
 
@@ -282,7 +283,7 @@ int oneshot_start(FAR struct oneshot_lowerhalf_s *lower,
 
   DEBUGASSERT(lower->ops->tick_start);
 
-  tick = timespec_to_tick(ts);
+  tick = clock_time2ticks(ts);
   return lower->ops->tick_start(lower, callback, arg, tick);
 }
 
@@ -296,7 +297,7 @@ int oneshot_cancel(FAR struct oneshot_lowerhalf_s *lower,
   DEBUGASSERT(lower->ops->tick_cancel);
 
   ret = lower->ops->tick_cancel(lower, &tick);
-  timespec_from_tick(ts, tick);
+  clock_ticks2time(ts, tick);
 
   return ret;
 }
@@ -311,7 +312,7 @@ int oneshot_current(FAR struct oneshot_lowerhalf_s *lower,
   DEBUGASSERT(lower->ops->tick_current);
 
   ret = lower->ops->tick_current(lower, &tick);
-  timespec_from_tick(ts, tick);
+  clock_ticks2time(ts, tick);
 
   return ret;
 }
@@ -326,7 +327,7 @@ int oneshot_tick_max_delay(FAR struct oneshot_lowerhalf_s *lower,
   DEBUGASSERT(lower->ops->max_delay);
 
   ret = lower->ops->max_delay(lower, &ts);
-  *ticks = timespec_to_tick(&ts);
+  *ticks = clock_time2ticks(&ts);
   return ret;
 }
 
@@ -339,7 +340,7 @@ int oneshot_tick_start(FAR struct oneshot_lowerhalf_s *lower,
 
   DEBUGASSERT(lower->ops->start);
 
-  timespec_from_tick(&ts, ticks);
+  clock_ticks2time(&ts, ticks);
   return lower->ops->start(lower, callback, arg, &ts);
 }
 
@@ -353,7 +354,7 @@ int oneshot_tick_cancel(FAR struct oneshot_lowerhalf_s *lower,
   DEBUGASSERT(lower->ops->cancel);
 
   ret = lower->ops->cancel(lower, &ts);
-  *ticks = timespec_to_tick(&ts);
+  *ticks = clock_time2ticks(&ts);
 
   return ret;
 }
@@ -368,7 +369,7 @@ int oneshot_tick_current(FAR struct oneshot_lowerhalf_s *lower,
   DEBUGASSERT(lower->ops->current);
 
   ret = lower->ops->current(lower, &ts);
-  *ticks = timespec_to_tick(&ts);
+  *ticks = clock_time2ticks(&ts);
 
   return ret;
 }

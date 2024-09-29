@@ -401,7 +401,8 @@ int nxsem_get_value(FAR sem_t *sem, FAR int *sval);
  *   calls to sem_unlink()).
  *
  * Input Parameters:
- *   name  - Semaphore name
+ *   sem    - Location to return the semaphore reference.
+ *   name   - Semaphore name.
  *   oflags - Semaphore creation options.  This may either or both of the
  *     following bit settings.
  *     oflags = 0:  Connect to the semaphore only if it already exists.
@@ -417,13 +418,13 @@ int nxsem_get_value(FAR sem_t *sem, FAR int *sval);
  *        SEM_VALUE_MAX.
  *
  * Returned Value:
- *   A pointer to sem_t or negated errno if unsuccessful.
+ *   0 (OK), or negated errno if unsuccessful.
  *
  * Assumptions:
  *
  ****************************************************************************/
 
-FAR sem_t *nxsem_open(FAR const char *name, int oflags, ...);
+int nxsem_open(FAR sem_t **sem, FAR const char *name, int oflags, ...);
 
 /****************************************************************************
  * Name:  nxsem_close
@@ -678,6 +679,47 @@ int nxsem_clockwait_uninterruptible(FAR sem_t *sem, clockid_t clockid,
  ****************************************************************************/
 
 int nxsem_tickwait_uninterruptible(FAR sem_t *sem, uint32_t delay);
+
+/****************************************************************************
+ * Name: nxsem_getprioceiling
+ *
+ * Description:
+ *   This function attempts to get the priority ceiling of a semaphore.
+ *
+ * Input Parameters:
+ *   sem          - A pointer to the semaphore whose attributes are to be
+ *                  modified
+ *   prioceiling  - Location to return the semaphore's priority ceiling
+ *
+ * Return Value:
+ *   This is an internal OS interface and should not be used by applications.
+ *   It follows the NuttX internal error return policy:  Zero (OK) is
+ *   returned on success.  A negated errno value is returned on failure
+ *
+ ****************************************************************************/
+
+int nxsem_getprioceiling(FAR const sem_t *sem, FAR int *prioceiling);
+
+/****************************************************************************
+ * Name: nxsem_setprioceiling
+ *
+ * Description:
+ *   Set the priority ceiling of a semaphore.
+ *
+ * Input Parameters:
+ *   mutex       - The mutex in which to set the mutex priority ceiling.
+ *   prioceiling - The mutex priority ceiling value to set.
+ *   old_ceiling - Location to return the mutex ceiling priority set before.
+ *
+ * Return Value:
+ *   This is an internal OS interface and should not be used by applications.
+ *   It follows the NuttX internal error return policy:  Zero (OK) is
+ *   returned on success.  A negated errno value is returned on failure
+ *
+ ****************************************************************************/
+
+int nxsem_setprioceiling(FAR sem_t *sem, int prioceiling,
+                         FAR int *old_ceiling);
 
 #undef EXTERN
 #ifdef __cplusplus

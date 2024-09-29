@@ -1,6 +1,7 @@
 /****************************************************************************
  * net/tcp/tcp_timer.c
- * Poll for the availability of TCP TX data
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
  *
  *   Copyright (C) 2007-2010, 2015-2016, 2018, 2020 Gregory Nutt. All rights
  *     reserved.
@@ -106,11 +107,15 @@ static int tcp_get_timeout(FAR struct tcp_conn_s *conn)
 #ifdef CONFIG_NET_TCP_KEEPALIVE
   if (timeout == 0)
     {
-      timeout = conn->keeptimer;
+      /* The conn->keeptimer units is decisecond and the timeout
+       * units is half-seconds, therefore they need to be unified.
+       */
+
+      timeout = conn->keeptimer / DSEC_PER_HSEC;
     }
-  else if (conn->keeptimer > 0 && timeout > conn->keeptimer)
+  else if (conn->keeptimer > 0 && timeout > conn->keeptimer / DSEC_PER_HSEC)
     {
-      timeout = conn->keeptimer;
+      timeout = conn->keeptimer / DSEC_PER_HSEC;
     }
 #endif
 
@@ -224,7 +229,7 @@ static void tcp_xmit_probe(FAR struct net_driver_s *dev,
 
 void tcp_update_timer(FAR struct tcp_conn_s *conn)
 {
-  int timeout = tcp_get_timeout(conn);
+  sclock_t timeout = tcp_get_timeout(conn);
 
   if (timeout > 0)
     {
@@ -698,11 +703,11 @@ void tcp_timer(FAR struct net_driver_s *dev, FAR struct tcp_conn_s *conn)
                * received from the remote peer?
                */
 
-              if (conn->keeptimer > hsec)
+              if (conn->keeptimer > hsec * DSEC_PER_HSEC)
                 {
                   /* Will not yet decrement to zero */
 
-                  conn->keeptimer -= hsec;
+                  conn->keeptimer -= hsec * DSEC_PER_HSEC;
                 }
               else
                 {

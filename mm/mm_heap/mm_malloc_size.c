@@ -1,6 +1,8 @@
 /****************************************************************************
  * mm/mm_heap/mm_malloc_size.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -38,12 +40,14 @@
 size_t mm_malloc_size(FAR struct mm_heap_s *heap, FAR void *mem)
 {
   FAR struct mm_freenode_s *node;
-#if CONFIG_MM_HEAP_MEMPOOL_THRESHOLD != 0
-  ssize_t size = mempool_multiple_alloc_size(heap->mm_mpool, mem);
-
-  if (size >= 0)
+#ifdef CONFIG_MM_HEAP_MEMPOOL
+  if (heap->mm_mpool)
     {
-      return size;
+      ssize_t size = mempool_multiple_alloc_size(heap->mm_mpool, mem);
+      if (size >= 0)
+        {
+          return size;
+        }
     }
 #endif
 

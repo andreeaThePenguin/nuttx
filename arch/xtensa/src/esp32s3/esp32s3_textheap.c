@@ -43,10 +43,6 @@
  * Pre-processor Definitions
  ****************************************************************************/
 
-#ifndef CONFIG_ESP32S3_RTC_HEAP
-#error "No suitable heap available. Enable ESP32S3_RTC_HEAP."
-#endif
-
 #define EXTRAM_INSTRUCTION_BUS_LOW  0x42000000
 #define EXTRAM_INSTRUCTION_BUS_HIGH 0x44000000
 
@@ -195,7 +191,7 @@ bool up_textheap_heapmember(void *p)
  *
  ****************************************************************************/
 
-FAR void *up_textheap_data_address(FAR void *p)
+void *up_textheap_data_address(void *p)
 {
   uintptr_t addr = (uintptr_t)p;
   if (SOC_DIRAM_IRAM_LOW <= addr && addr < SOC_DIRAM_IRAM_HIGH)
@@ -210,7 +206,7 @@ FAR void *up_textheap_data_address(FAR void *p)
       addr -= EXTRAM_D_I_BUS_OFFSET;
     }
 
-  return (FAR void *)addr;
+  return (void *)addr;
 }
 
 /****************************************************************************
@@ -227,9 +223,38 @@ IRAM_ATTR void up_textheap_data_sync(void)
 {
   irqstate_t flags = enter_critical_section();
 
+#ifdef CONFIG_ESP32S3_SPIRAM
   esp_spiram_writeback_cache();
+#endif
   cache_hal_disable(CACHE_TYPE_INSTRUCTION);
   cache_hal_enable(CACHE_TYPE_INSTRUCTION);
 
   leave_critical_section(flags);
 }
+
+/****************************************************************************
+ * Name: up_copy_section
+ *
+ * Description:
+ *   This function copies a section from a general temporary buffer (src) to
+ *   a specific address (dest). This is typically used in architectures that
+ *   require specific handling of memory sections.
+ *
+ * Input Parameters:
+ *   dest - A pointer to the destination where the data needs to be copied.
+ *   src  - A pointer to the source from where the data needs to be copied.
+ *   n    - The number of bytes to be copied from src to dest.
+ *
+ * Returned Value:
+ *   Zero (OK) on success; a negated errno value on failure.
+ *
+ ****************************************************************************/
+
+#if defined(CONFIG_ARCH_USE_COPY_SECTION)
+int up_copy_section(void *dest, const void *src, size_t n)
+{
+  memcpy(up_textheap_data_address(dest), src, n);
+
+  return OK;
+}
+#endif

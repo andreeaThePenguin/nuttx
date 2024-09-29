@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/environ/env_dup.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -72,7 +74,7 @@ int env_dup(FAR struct task_group_s *group, FAR char * const *envcp)
 
   /* Is there an environment ? */
 
-  if (envcp != NULL)
+  if (envcp != NULL && group->tg_envp == NULL)
     {
       /* Pre-emption must be disabled throughout the following because the
        * environment may be shared.

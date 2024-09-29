@@ -111,12 +111,14 @@ void backtrace(uint64_t rbp)
 
 void up_dump_register(void *dumpregs)
 {
-  volatile uint64_t *regs = dumpregs ? dumpregs : g_current_regs;
+  volatile uint64_t *regs = dumpregs ? dumpregs : up_current_regs();
   uint64_t mxcsr;
   uint64_t cr2;
 
-  asm volatile ("stmxcsr %0"::"m"(mxcsr):"memory");
-  asm volatile ("mov %%cr2, %%rax; mov %%rax, %0"::"m"(cr2):"memory", "rax");
+  __asm__ volatile ("stmxcsr %0"::"m"(mxcsr):"memory");
+  __asm__ volatile ("mov %%cr2, %%rax; mov %%rax, %0"
+                    ::"m"(cr2):"memory", "rax");
+
   _alert("----------------CUT HERE-----------------\n");
   _alert("Gerneral Informations:\n");
   _alert("CPL: %" PRId64 ", RPL: %" PRId64 "\n",
@@ -152,18 +154,5 @@ void up_dump_register(void *dumpregs)
          regs[REG_R14], regs[REG_R15]);
   _alert("Dumping Stack (+-64 bytes):\n");
 
-  if (regs[REG_RSP] > 0 && regs[REG_RSP] < 0x1000000)
-    {
-      print_mem((void *)regs[REG_RSP] - 512,
-          128 * 0x200000 - regs[REG_RSP] + 512);
-    }
-  else
-    {
-      print_mem((void *)regs[REG_RSP] - 512, 1024);
-    }
-
-#ifdef CONFIG_DEBUG_NOOPT
-  backtrace(regs[REG_RBP]);
-#endif
   _alert("-----------------------------------------\n");
 }

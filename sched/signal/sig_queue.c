@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/signal/sig_queue.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -80,7 +82,6 @@ int nxsig_queue(int pid, int signo, union sigval value)
   FAR struct tcb_s *rtcb = this_task();
 #endif
   siginfo_t info;
-  int ret;
 
   sinfo("pid=0x%08x signo=%d value=%d\n", pid, signo, value.sival_int);
 
@@ -105,11 +106,7 @@ int nxsig_queue(int pid, int signo, union sigval value)
 
   /* Send the signal */
 
-  sched_lock();
-  ret = nxsig_dispatch(pid, &info);
-  sched_unlock();
-
-  return ret;
+  return nxsig_dispatch(pid, &info, false);
 }
 
 /****************************************************************************

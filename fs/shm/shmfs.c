@@ -35,6 +35,7 @@
 
 #include "shm/shmfs.h"
 #include "inode/inode.h"
+#include "sched/sched.h"
 
 /****************************************************************************
  * Private Function Prototypes
@@ -184,21 +185,13 @@ static int shmfs_release(FAR struct inode *inode)
    * The inode is released after this call, hence checking if i_crefs <= 1.
    */
 
-  int ret = inode_lock();
-  if (ret >= 0)
+  if (inode->i_parent == NULL && atomic_load(&inode->i_crefs) <= 1)
     {
-      if (inode->i_parent == NULL &&
-          inode->i_crefs <= 1)
-        {
-          shmfs_free_object(inode->i_private);
-          inode->i_private = NULL;
-          ret = OK;
-        }
-
-      inode_unlock();
+      shmfs_free_object(inode->i_private);
+      inode->i_private = NULL;
     }
 
-  return ret;
+  return OK;
 }
 
 /****************************************************************************
@@ -266,20 +259,13 @@ static int shmfs_truncate(FAR struct file *filep, off_t length)
 #ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
 static int shmfs_unlink(FAR struct inode *inode)
 {
-  int ret = inode_lock();
-
-  if (ret >= 0)
+  if (atomic_load(&inode->i_crefs) <= 1)
     {
-      if (inode->i_crefs <= 1)
-        {
-          shmfs_free_object(inode->i_private);
-          inode->i_private = NULL;
-        }
-
-      inode_unlock();
+      shmfs_free_object(inode->i_private);
+      inode->i_private = NULL;
     }
 
-  return ret;
+  return OK;
 }
 #endif
 
@@ -295,7 +281,7 @@ static int shmfs_map_object(FAR struct shmfs_object_s *object,
 #ifdef CONFIG_BUILD_KERNEL
   /* Map the physical pages of the shm object with MMU. */
 
-  FAR struct tcb_s *tcb = nxsched_self();
+  FAR struct tcb_s *tcb = this_task();
   FAR struct task_group_s *group = tcb->group;
   FAR uintptr_t *pages = (FAR uintptr_t *)&object->paddr;
   uintptr_t mapaddr;

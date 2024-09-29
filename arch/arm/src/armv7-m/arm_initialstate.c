@@ -180,7 +180,7 @@ void up_initial_state(struct tcb_s *tcb)
 
 noinline_function void arm_initialize_stack(void)
 {
-  uint32_t stack = up_get_intstackbase(up_cpu_index()) + INTSTACK_SIZE;
+  uint32_t stack = up_get_intstackbase(this_cpu()) + INTSTACK_SIZE;
   uint32_t temp = 0;
 
   __asm__ __volatile__
@@ -190,6 +190,7 @@ noinline_function void arm_initialize_stack(void)
 
       "mov %1, sp\n"
       "msr psp, %1\n"
+      "isb sy\n"
 
       /* Select PSP */
 
@@ -201,6 +202,7 @@ noinline_function void arm_initialize_stack(void)
       /* Initialize MSP */
 
       "msr msp, %0\n"
+      "isb sy\n"
       :
       : "r" (stack), "r" (temp)
       : "memory");

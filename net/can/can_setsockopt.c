@@ -1,6 +1,8 @@
 /****************************************************************************
  * net/can/can_setsockopt.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -30,8 +32,6 @@
 #include <assert.h>
 #include <debug.h>
 
-#include <netpacket/can.h>
-
 #include <nuttx/net/net.h>
 #include <nuttx/net/can.h>
 
@@ -53,7 +53,7 @@
  *   'option' argument to the value pointed to by the 'value' argument for
  *   the socket specified by the 'psock' argument.
  *
- *   See <netinet/can.h> for the a complete list of values of CAN protocol
+ *   See <nuttx/can.h> for the a complete list of values of CAN protocol
  *   options.
  *
  * Input Parameters:
@@ -208,6 +208,39 @@ int can_setsockopt(FAR struct socket *psock, int level, int option,
         conn->tx_deadline = *(FAR int32_t *)value;
 
         break;
+#endif
+
+#if CONFIG_NET_RECV_BUFSIZE > 0
+      case SO_RCVBUF:
+        {
+          int buffersize;
+
+          /* Verify that option is the size of an 'int'.  Should also check
+           * that 'value' is properly aligned for an 'int'
+           */
+
+          if (value_len != sizeof(int))
+            {
+              return -EINVAL;
+            }
+
+          /* Get the value.  Is the option being set or cleared? */
+
+          buffersize = *(FAR int *)value;
+          if (buffersize < 0)
+            {
+              return -EINVAL;
+            }
+
+#if CONFIG_NET_MAX_RECV_BUFSIZE > 0
+          buffersize = MIN(buffersize, CONFIG_NET_MAX_RECV_BUFSIZE);
+#endif
+
+          conn->recv_buffnum = (buffersize + CONFIG_IOB_BUFSIZE - 1)
+                              / CONFIG_IOB_BUFSIZE;
+
+          break;
+        }
 #endif
 
       default:

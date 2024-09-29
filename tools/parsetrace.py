@@ -2,6 +2,8 @@
 ############################################################################
 # tools/parsetrace.py
 #
+# SPDX-License-Identifier: Apache-2.0
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.  The
@@ -26,18 +28,18 @@ import re
 import subprocess
 from typing import Union
 
-from pycstruct import pycstruct
-
 try:
     import cxxfilt
     import parse
     from elftools.elf.elffile import ELFFile
     from elftools.elf.sections import SymbolTableSection
+    from pycstruct import pycstruct
     from pydantic import BaseModel
 
 except ModuleNotFoundError:
     print("Please execute the following command to install dependencies:")
-    print("pip install pyelftools cxxfilt pydantic parse")
+    print("pip install pyelftools cxxfilt pydantic parse pycstruct")
+    exit(1)
 
 
 class SymbolTables(object):

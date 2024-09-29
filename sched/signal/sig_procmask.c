@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/signal/sig_procmask.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -91,8 +93,6 @@ int nxsig_procmask(int how, FAR const sigset_t *set, FAR sigset_t *oset)
   irqstate_t flags;
   int        ret = OK;
 
-  sched_lock();
-
   /* Return the old signal mask if requested */
 
   if (oset != NULL)
@@ -148,7 +148,6 @@ int nxsig_procmask(int how, FAR const sigset_t *set, FAR sigset_t *oset)
       nxsig_unmask_pendingsignal();
     }
 
-  sched_unlock();
   return ret;
 }
 

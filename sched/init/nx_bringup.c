@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/init/nx_bringup.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -32,6 +34,7 @@
 
 #include <nuttx/arch.h>
 #include <nuttx/board.h>
+#include <nuttx/coredump.h>
 #include <nuttx/fs/fs.h>
 #include <nuttx/init.h>
 #include <nuttx/nuttx.h>
@@ -49,7 +52,6 @@
 #include "sched/sched.h"
 #include "wqueue/wqueue.h"
 #include "init/init.h"
-#include "misc/coredump.h"
 
 #ifdef CONFIG_ETC_ROMFS
 #  include <nuttx/drivers/ramdisk.h>
@@ -529,9 +531,11 @@ int nx_bringup(void)
 
 #if !defined(CONFIG_DISABLE_ENVIRON) && (defined(CONFIG_PATH_INITIAL) || \
      defined(CONFIG_LDPATH_INITIAL))
-  /* We an save a few bytes by discarding the IDLE thread's environment. */
+  /* We would save a few bytes by discarding the IDLE thread's environment.
+   * But when kthreads share the same group, this is no longer proper, so
+   * we can't do clearenv() now.
+   */
 
-  clearenv();
 #endif
 
   sched_trace_end();

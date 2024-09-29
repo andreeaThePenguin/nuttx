@@ -22,6 +22,19 @@ config DRIVERS_VIRTIO_MMIO_QUEUE_LEN
 		If this value equals to 0, use the max queue length get from
 		mmio register.
 
+config DRIVERS_VIRTIO_PCI
+	bool "Virtio PCI Device Support"
+	default n
+
+config DRIVERS_VIRTIO_PCI_POLLING_PERIOD
+	int "Virtio PCI Polling Period (us)"
+	depends on DRIVERS_VIRTIO_PCI
+	default 0
+	---help---
+		if Polling Period <= 0, not support polling mode.
+		if Polling Period > 0, support polling mode, and it represent
+		polling period (us).
+
 config DRIVERS_VIRTIO_BLK
 	bool "Virtio block support"
 	depends on !DISABLE_MOUNTPOINT
@@ -35,8 +48,8 @@ config DRIVERS_VIRTIO_GPU
 
 config DRIVERS_VIRTIO_INPUT
 	bool "Virtio input support"
+	depends on INPUT && INPUT_TOUCHSCREEN && INPUT_KEYBOARD && INPUT_MOUSE
 	default n
-	depends on INPUT
 
 config DRIVERS_VIRTIO_NET
 	bool "Virtio network support"
@@ -74,6 +87,14 @@ if DRIVERS_VIRTIO_SERIAL
 config DRIVERS_VIRTIO_SERIAL_BUFSIZE
 	int "Virtio serial driver buffer size"
 	default 256
+
+config DRIVERS_VIRTIO_SERIAL_CONSOLE
+	bool "Virtio serial console"
+	default n
+	select SERIAL_CONSOLE
+	---help---
+		This enables using first virtio serial device as console.
+
 endif
 
 config DRIVERS_VIRTIO_SOUND

@@ -153,6 +153,11 @@
 #  include "esp32_spi.h"
 #endif
 
+#ifdef CONFIG_SPI_SLAVE_DRIVER
+#  include "esp32_spi.h"
+#  include "esp32_board_spislavedev.h"
+#endif
+
 #ifdef CONFIG_LCD_BACKPACK
 #  include "esp32_lcd_backpack.h"
 #endif
@@ -167,6 +172,10 @@
 
 #ifdef CONFIG_ESP_RMT
 #  include "esp32_board_rmt.h"
+#endif
+
+#ifdef CONFIG_ESP_MCPWM
+#  include "esp32_board_mcpwm.h"
 #endif
 
 #include "esp32-devkitc.h"
@@ -282,6 +291,22 @@ int esp32_bringup(void)
       syslog(LOG_ERR, "ERROR: esp32_pwm_setup() failed: %d\n", ret);
     }
 #endif /* CONFIG_ESP32_LEDC */
+
+#ifdef CONFIG_ESP_MCPWM_CAPTURE
+  ret = board_capture_initialize();
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: board_capture_initialize failed: %d\n", ret);
+    }
+#endif
+
+#ifdef CONFIG_ESP_MCPWM_MOTOR_BDC
+  ret = board_motor_initialize();
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: board_motor_initialize failed: %d\n", ret);
+    }
+#endif
 
 #ifdef CONFIG_SENSORS_MAX6675
   ret = board_max6675_initialize(0, 2);
@@ -682,15 +707,22 @@ int esp32_bringup(void)
     }
 #endif
 
-#ifdef CONFIG_SPI_DRIVER
-#  ifdef CONFIG_ESP32_SPI2
+#if defined(CONFIG_ESP32_SPI2) && defined(CONFIG_SPI_DRIVER)
   ret = board_spidev_initialize(ESP32_SPI2);
   if (ret < 0)
     {
       syslog(LOG_ERR, "Failed to initialize SPI%d driver: %d\n",
              ESP32_SPI2, ret);
     }
-#  endif
+#endif
+
+# if defined(CONFIG_ESP32_SPI2) && defined(CONFIG_SPI_SLAVE_DRIVER)
+  ret = board_spislavedev_initialize(ESP32_SPI2);
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "Failed to initialize SPI%d Slave driver: %d\n",
+              ESP32_SPI2, ret);
+    }
 #endif
 
 #ifdef CONFIG_WS2812

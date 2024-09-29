@@ -35,12 +35,13 @@
 #include <time.h>
 #include <dirent.h>
 
+#include <nuttx/atomic.h>
 #include <nuttx/mutex.h>
 #include <nuttx/semaphore.h>
-#include <nuttx/spinlock.h>
 #include <nuttx/mm/map.h>
 #include <nuttx/spawn.h>
 #include <nuttx/queue.h>
+#include <nuttx/irq.h>
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -118,7 +119,6 @@
 #define   FSNODEFLAG_TYPE_SOFTLINK  0x00000008 /*   Soft link              */
 #define   FSNODEFLAG_TYPE_SOCKET    0x00000009 /*   Socket                 */
 #define   FSNODEFLAG_TYPE_PIPE      0x0000000a /*   Pipe                   */
-#define FSNODEFLAG_DELETED          0x00000010 /* Unlinked                 */
 
 #define INODE_IS_TYPE(i,t) \
   (((i)->i_flags & FSNODEFLAG_TYPE_MASK) == (t))
@@ -163,6 +163,7 @@
 #define CH_STAT_GID        (1 << 2)
 #define CH_STAT_ATIME      (1 << 3)
 #define CH_STAT_MTIME      (1 << 4)
+#define CH_STAT_SIZE       (1 << 7)
 
 /****************************************************************************
  * Public Type Definitions
@@ -225,10 +226,11 @@ struct file_operations
                        FAR struct mm_map_entry_s *map);
   CODE int     (*truncate)(FAR struct file *filep, off_t length);
 
-  /* The two structures need not be common after this point */
-
   CODE int     (*poll)(FAR struct file *filep, FAR struct pollfd *fds,
                        bool setup);
+
+  /* The two structures need not be common after this point */
+
 #ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
   CODE int     (*unlink)(FAR struct inode *inode);
 #endif
@@ -409,7 +411,7 @@ struct inode
   FAR struct inode *i_parent;   /* Link to parent level inode */
   FAR struct inode *i_peer;     /* Link to same level inode */
   FAR struct inode *i_child;    /* Link to lower level inode */
-  int16_t           i_crefs;    /* References to inode */
+  atomic_short      i_crefs;    /* References to inode */
   uint16_t          i_flags;    /* Flags for inode */
   union inode_ops_u u;          /* Inode operations */
   ino_t             i_ino;      /* Inode serial number */
@@ -465,6 +467,9 @@ typedef struct cookie_io_functions_t
 struct file
 {
   int               f_oflags;   /* Open mode flags */
+#ifdef CONFIG_FS_REFCOUNT
+  int               f_refs;     /* Reference count */
+#endif
   off_t             f_pos;      /* File position */
   FAR struct inode *f_inode;    /* Driver or file system interface */
   FAR void         *f_priv;     /* Per file driver private data */
@@ -474,6 +479,14 @@ struct file
 
 #ifdef CONFIG_FDCHECK
   uint8_t           f_tag_fdcheck; /* File owner fdcheck tag, init to 0 */
+#endif
+
+#if CONFIG_FS_BACKTRACE > 0
+  FAR void         *f_backtrace[CONFIG_FS_BACKTRACE]; /* Backtrace to while file opens */
+#endif
+
+#if CONFIG_FS_LOCK_BUCKET_SIZE > 0
+  bool              locked; /* Filelock state: false - unlocked, true - locked */
 #endif
 };
 
@@ -486,8 +499,8 @@ struct file
 
 struct filelist
 {
-  spinlock_t        fl_lock;    /* Manage access to the file list */
   uint8_t           fl_rows;    /* The number of rows of fl_files array */
+  uint8_t           fl_crefs;   /* The references to filelist */
   FAR struct file **fl_files;   /* The pointer of two layer file descriptors array */
 
   /* Pre-allocated files to avoid allocator access during thread creation
@@ -497,7 +510,7 @@ struct filelist
    */
 
   FAR struct file  *fl_prefile;
-  FAR struct file   fl_prefiles[CONFIG_NFILE_DESCRIPTORS_PER_BLOCK];
+  struct file       fl_prefiles[CONFIG_NFILE_DESCRIPTORS_PER_BLOCK];
 };
 
 /* The following structure defines the list of files used for standard C I/O.
@@ -858,14 +871,38 @@ int nx_umount2(FAR const char *target, unsigned int flags);
 void files_initlist(FAR struct filelist *list);
 
 /****************************************************************************
- * Name: files_releaselist
+ * Name: files_dumplist
  *
  * Description:
- *   Release a reference to the file list
+ *   Dump the list of files.
  *
  ****************************************************************************/
 
-void files_releaselist(FAR struct filelist *list);
+#ifdef CONFIG_DUMP_ON_EXIT
+void files_dumplist(FAR struct filelist *list);
+#else
+#  define files_dumplist(l)
+#endif
+
+/****************************************************************************
+ * Name: files_getlist
+ *
+ * Description:
+ *   Get the list of files by tcb.
+ *
+ ****************************************************************************/
+
+FAR struct filelist *files_getlist(FAR struct tcb_s *tcb);
+
+/****************************************************************************
+ * Name: files_putlist
+ *
+ * Description:
+ *   Release the list of files.
+ *
+ ****************************************************************************/
+
+void files_putlist(FAR struct filelist * list);
 
 /****************************************************************************
  * Name: files_countlist
@@ -1122,6 +1159,41 @@ int nx_open(FAR const char *path, int oflags, ...);
  ****************************************************************************/
 
 int fs_getfilep(int fd, FAR struct file **filep);
+
+/****************************************************************************
+ * Name: fs_reffilep
+ *
+ * Description:
+ *   To specify filep increase the reference count.
+ *
+ * Input Parameters:
+ *   None.
+ *
+ * Returned Value:
+ *   None.
+ *
+ ****************************************************************************/
+
+void fs_reffilep(FAR struct file *filep);
+
+/****************************************************************************
+ * Name: fs_putfilep
+ *
+ * Description:
+ *   Release reference counts for files, less than or equal to 0 and close
+ *   the file
+ *
+ * Input Parameters:
+ *   filep  - The caller provided location in which to return the 'struct
+ *            file' instance.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_FS_REFCOUNT
+int fs_putfilep(FAR struct file *filep);
+#else
+#  define fs_putfilep(f)
+#endif
 
 /****************************************************************************
  * Name: file_close

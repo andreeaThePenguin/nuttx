@@ -1,6 +1,8 @@
 /****************************************************************************
  * sched/task/task_exit.c
  *
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.  The
@@ -108,7 +110,7 @@ int nxtask_exit(void)
    * ready-to-run with state == TSTATE_TASK_RUNNING
    */
 
-  nxsched_remove_readytorun(dtcb, true);
+  nxsched_remove_self(dtcb);
 
   /* Get the new task at the head of the ready to run list */
 
@@ -138,8 +140,7 @@ int nxtask_exit(void)
 #ifdef CONFIG_SMP
   /* Make sure that the system knows about the locked state */
 
-  spin_setbit(&g_cpu_lockset, this_cpu(), &g_cpu_locksetlock,
-              &g_cpu_schedlock);
+  g_cpu_lockset |= (1 << cpu);
 #endif
 
   rtcb->task_state = TSTATE_TASK_READYTORUN;
@@ -181,8 +182,7 @@ int nxtask_exit(void)
     {
       /* Make sure that the system knows about the unlocked state */
 
-      spin_clrbit(&g_cpu_lockset, this_cpu(), &g_cpu_locksetlock,
-                  &g_cpu_schedlock);
+      g_cpu_lockset &= ~(1 << cpu);
     }
 #endif
 
